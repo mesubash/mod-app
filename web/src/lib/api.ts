@@ -50,3 +50,66 @@ export function distance(a: Point, b: Point): number {
   const x = dLon * Math.cos(lat);
   return Math.round(Math.sqrt(dLat * dLat + x * x) * R);
 }
+
+export type Closure = {
+  id: number;
+  edges: string[];
+  reason: string;
+  kind: string;
+  starts: number;
+  ends: number;
+};
+
+export type Report = {
+  id: number;
+  kind: "jam" | "flood" | "closed" | "accident";
+  lon: number;
+  lat: number;
+  created: number;
+};
+
+async function json<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  return response.json();
+}
+
+export const getClosures = () => json<Closure[]>("/closures");
+
+export const getReports = () => json<Report[]>("/reports");
+
+export const postReport = (kind: Report["kind"], at: Point) =>
+  json<Report>("/reports", { method: "POST", body: JSON.stringify({ kind, at }) });
+
+export const postTripAnswer = (took_suggested: string, already_knew: string) =>
+  json<{ id: number }>("/trip-answers", {
+    method: "POST",
+    body: JSON.stringify({ took_suggested, already_knew }),
+  });
+
+export const postClosure = (
+  token: string,
+  body: { edges: string[]; reason: string; kind: string; minutes: number },
+) =>
+  json<Closure>("/closures", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-operator-token": token },
+    body: JSON.stringify(body),
+  });
+
+export const clearClosure = (token: string, id: number) =>
+  json<{ cleared: boolean }>(`/closures/${id}`, {
+    method: "DELETE",
+    headers: { "x-operator-token": token },
+  });
+
+/** Minutes until a timestamp, for "until about 10:30" style copy. */
+export function until(epochSeconds: number): string {
+  const mins = Math.round((epochSeconds * 1000 - Date.now()) / 60000);
+  if (mins <= 0) return "now";
+  if (mins < 60) return `about ${mins} min`;
+  return `about ${Math.round(mins / 60)} h`;
+}

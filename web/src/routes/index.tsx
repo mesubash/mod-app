@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bike, Bus, Car, Crosshair, Truck } from "lucide-react";
+import { Bike, Bus, Car, Crosshair, TriangleAlert, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { RouteMap, type MapRoute } from "@/components/mod/route-map";
@@ -7,8 +7,11 @@ import { Screen } from "@/components/mod/ui";
 import { usePosition } from "@/hooks/use-position";
 import {
   fetchRoutes,
+  getClosures,
   kilometres,
   minutes,
+  until,
+  type Closure,
   type Point,
   type RouteResponse,
   type Vehicle,
@@ -37,6 +40,15 @@ function Home() {
   const [destination, setDestination] = useState(DEFAULT_DESTINATION);
   const [result, setResult] = useState<RouteResponse | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [closures, setClosures] = useState<Closure[]>([]);
+
+  // What is shut is the reason this product exists, so it loads whether or not
+  // the traveller has shared a position yet.
+  useEffect(() => {
+    getClosures()
+      .then(setClosures)
+      .catch(() => setClosures([]));
+  }, []);
 
   const origin: Point | null = position.point;
 
@@ -72,6 +84,22 @@ function Home() {
           </h1>
           <p className="text-base text-muted sm:text-lg">Where are you going?</p>
         </header>
+
+        {closures.length > 0 && (
+          <section className="space-y-2">
+            {closures.map((c) => (
+              <div key={c.id} className="rounded-[6px] bg-surface p-4">
+                <h2 className="flex items-start gap-2 text-base font-medium text-alert">
+                  <TriangleAlert size={20} className="mt-0.5 shrink-0" aria-hidden />
+                  {c.reason}
+                </h2>
+                <p className="mt-1 text-base text-muted">
+                  {c.kind} · clears in {until(c.ends)}. Your route below already avoids it.
+                </p>
+              </div>
+            ))}
+          </section>
+        )}
 
         {!origin && (
           <section className="rounded-[6px] bg-surface p-4">

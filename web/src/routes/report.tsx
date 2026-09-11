@@ -1,83 +1,104 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { CarFront, CloudRain, Ban, TrafficCone } from "lucide-react";
 import { useState } from "react";
-import { Screen, PageTitle, Meta, TextLink, BackLink } from "@/components/mod/ui";
-import { reportKinds } from "@/lib/mod-data";
+
+import { Screen } from "@/components/mod/ui";
+import { usePosition } from "@/hooks/use-position";
+import { postReport, type Report as ReportRow } from "@/lib/api";
 
 export const Route = createFileRoute("/report")({
   head: () => ({
     meta: [
-      { title: "Report a problem on the road — MOD" },
+      { title: "Report a problem — MOD" },
       {
         name: "description",
-        content:
-          "One tap to report a jam, flooding, a closed road or an accident, with your position attached.",
-      },
-      { property: "og:title", content: "Report a problem on the road — MOD" },
-      {
-        property: "og:description",
-        content:
-          "One tap to report a jam, flooding, a closed road or an accident, with your position attached.",
+        content: "Tell MOD what you can see on the road, in one tap.",
       },
     ],
   }),
   component: Report,
 });
 
+const KINDS = [
+  { id: "jam", label: "Heavy jam", icon: TrafficCone },
+  { id: "flood", label: "Flooding", icon: CloudRain },
+  { id: "closed", label: "Road closed", icon: Ban },
+  { id: "accident", label: "Accident", icon: CarFront },
+] as const;
+
 function Report() {
-  const [sent, setSent] = useState<string | null>(null);
+  const position = usePosition(false);
+  const [sent, setSent] = useState<ReportRow["kind"] | null>(null);
   const [failed, setFailed] = useState(false);
+
+  const here = position.point;
+
+  async function send(kind: ReportRow["kind"]) {
+    if (!here) {
+      position.ask();
+      return;
+    }
+    setFailed(false);
+    try {
+      await postReport(kind, here);
+      setSent(kind);
+    } catch {
+      setFailed(true);
+    }
+  }
 
   return (
     <Screen>
-      <div className="space-y-8">
-        <BackLink to="/trip">Back to trip</BackLink>
-
-        <header className="space-y-2">
-          <PageTitle>What do you see?</PageTitle>
-          <Meta>Your position on Old Baneshwor is sent with the report.</Meta>
+      <div className="space-y-5">
+        <header className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">What do you see?</h1>
+          <p className="text-base text-muted">
+            {here
+              ? "Your position is sent with the report. Nothing else is."
+              : "MOD needs your position so the report means something."}
+          </p>
         </header>
 
-        <ul className="space-y-2">
-          {reportKinds.map((kind) => (
-            <li key={kind}>
-              <button
-                type="button"
-                onClick={() => {
-                  setFailed(false);
-                  setSent(kind);
-                }}
-                className="min-h-[3.5rem] w-full rounded-md bg-surface px-4 py-4 text-left text-lg font-medium hover:bg-surface-hover"
-              >
-                {kind}
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {sent ? <p className="text-confirm">{sent} reported at Old Baneshwor. Thank you.</p> : null}
-
-        {failed ? (
-          <p role="alert">
-            The report did not send — no signal here. It will send by itself when you have signal
-            again.
-          </p>
-        ) : null}
-
-        <div className="space-y-2 border-t border-border pt-6">
-          <TextLink to="/trip">Done</TextLink>
-          <div>
+        <div className="grid grid-cols-2 gap-3">
+          {KINDS.map(({ id, label, icon: Icon }) => (
             <button
+              key={id}
               type="button"
-              onClick={() => {
-                setSent(null);
-                setFailed(true);
-              }}
-              className="min-h-[2.75rem] rounded-md px-1 text-base text-muted underline underline-offset-4 hover:bg-surface-hover"
+              onClick={() => send(id)}
+              className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-[6px] p-4 text-base ${
+                sent === id
+                  ? "bg-foreground text-inverse"
+                  : "bg-surface text-foreground hover:bg-surface-hover"
+              }`}
             >
-              Show send failure state
+              <Icon size={26} strokeWidth={1.8} aria-hidden />
+              {label}
             </button>
-          </div>
+          ))}
         </div>
+
+        {sent && (
+          <p className="text-base text-confirm">
+            Reported. Thank you — that is the only thing MOD knows about this road right now.
+          </p>
+        )}
+
+        {failed && (
+          <p className="text-base text-alert">
+            That did not send. Your trip is unaffected; try again in a moment.
+          </p>
+        )}
+
+        {!here && position.status === "denied" && (
+          <p className="text-base text-muted">
+            Location is blocked, so a report cannot be placed on the map. Allow it in your browser
+            settings.
+          </p>
+        )}
+
+        <Link to="/trip" className="inline-block text-base underline underline-offset-4">
+          Back to trip
+        </Link>
       </div>
     </Screen>
   );
