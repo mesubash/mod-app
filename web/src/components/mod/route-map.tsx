@@ -1,11 +1,14 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { GeoJSONSource, LngLatBounds, Map as MapLibreMap } from "maplibre-gl";
+import { LngLatBounds, Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
-// OpenFreeMap needs no key and no account. Swapping tile providers is this
-// one line; MapLibre takes any style URL.
+// Tiles come straight from the browser to OpenFreeMap. No key, no account, and
+// nothing to do with the routing API: the map draws with the backend down, it
+// just has no line on it. Swapping provider is this one line.
 const STYLE = "https://tiles.openfreemap.org/styles/positron";
+
+const CORRIDOR: [number, number] = [85.33, 27.69];
 
 export type MapRoute = {
   geometry: [number, number][];
@@ -29,83 +32,93 @@ export function RouteMap({
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
-  const [failed, setFailed] = useState(false);
+  const drawn = useRef<string[]>([]);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!holder.current || map.current) return;
     const m = new MapLibreMap({
       container: holder.current,
       style: STYLE,
-      center: [85.33, 27.69],
+      center: CORRIDOR,
       zoom: 12,
       attributionControl: { compact: true },
-      // A traveller reading this is moving. Tilting and spinning the map is
-      // one more thing to understand at a moment when they have no attention
-      // to spare.
+      // A traveller reading this is moving. Tilting and spinning the map is one
+      // more thing to operate at a moment when they have no attention spare.
       pitchWithRotate: false,
       dragRotate: false,
       touchZoomRotate: false,
     });
-    m.on("error", () => setFailed(true));
+
+    // Only the style failing is worth hiding the map for. MapLibre reports a
+    // missing sprite or a single dropped tile through the same channel, and
+    // treating those as fatal blanked a map that was otherwise fine.
+    m.on("error", (e) => console.warn("map:", e.error?.message ?? e));
+    m.on("load", () => setReady(true));
+
+    // The container is sized by CSS after mount, so the map is frequently
+    // created against a box of zero width. Without this it renders one grey
+    // rectangle and never recovers.
+    const resize = new ResizeObserver(() => m.resize());
+    resize.observe(holder.current);
+
     map.current = m;
     return () => {
+      resize.disconnect();
       m.remove();
       map.current = null;
+      drawn.current = [];
+      setReady(false);
     };
   }, []);
 
   useEffect(() => {
     const m = map.current;
-    if (!m) return;
+    if (!m || !ready) return;
 
-    const draw = () => {
-      for (const [i, route] of routes.entries()) {
-        const id = `route-${i}`;
-        const data = {
-          type: "Feature" as const,
+    for (const id of drawn.current) {
+      if (m.getLayer(id)) m.removeLayer(id);
+      if (m.getSource(id)) m.removeSource(id);
+    }
+    drawn.current = [];
+
+    routes.forEach((route, i) => {
+      if (route.geometry.length < 2) return;
+      const id = `route-${i}`;
+      m.addSource(id, {
+        type: "geojson",
+        data: {
+          type: "Feature",
           properties: {},
-          geometry: { type: "LineString" as const, coordinates: route.geometry },
-        };
-        const existing = m.getSource(id);
-        if (existing) {
-          (existing as GeoJSONSource).setData(data);
-          continue;
-        }
-        m.addSource(id, { type: "geojson", data });
-        m.addLayer({
-          id,
-          type: "line",
-          source: id,
-          layout: { "line-cap": "round", "line-join": "round" },
-          paint: {
-            "line-color": TONE[route.tone].color,
-            "line-width": TONE[route.tone].width,
-          },
-        });
-      }
+          geometry: { type: "LineString", coordinates: route.geometry },
+        },
+      });
+      m.addLayer({
+        id,
+        type: "line",
+        source: id,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": TONE[route.tone].color,
+          "line-width": TONE[route.tone].width,
+        },
+      });
+      drawn.current.push(id);
+    });
 
-      const points = routes.flatMap((r) => r.geometry);
-      if (points.length > 1) {
-        const bounds = points.reduce(
-          (b, p) => b.extend(p),
-          new LngLatBounds(points[0]!, points[0]!),
-        );
-        m.fitBounds(bounds, { padding: 36, duration: 0 });
-      }
-    };
-
-    if (m.isStyleLoaded()) draw();
-    else m.once("load", draw);
-  }, [routes]);
-
-  if (failed) return null;
+    const points = routes.flatMap((r) => r.geometry);
+    if (points.length > 1) {
+      const bounds = points.reduce((b, p) => b.extend(p), new LngLatBounds(points[0]!, points[0]!));
+      m.fitBounds(bounds, { padding: 36, duration: 0 });
+    }
+  }, [routes, ready]);
 
   return (
     <div
       ref={holder}
       role="img"
       aria-label={label}
-      className="w-full overflow-hidden rounded-[6px] border border-border"
+      className="w-full overflow-hidden rounded-[6px] border border-border bg-surface"
       style={{ height }}
     />
   );

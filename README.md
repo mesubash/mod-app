@@ -100,9 +100,12 @@ bun run build
 Both halves at once, in two terminals:
 
 ```sh
-uv run uvicorn api.main:app          # or: docker compose up --build
+uv run uvicorn api.main:app
 cd web && bun run dev                # http://localhost:3000
 ```
+
+`docker compose up --build` runs the API in a container instead, if you want it
+detached from the shell.
 
 Nothing to configure: the API allows localhost origins by default. The browser
 calls it directly rather than through a proxy, because TanStack Start's router
