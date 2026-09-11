@@ -1,15 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Bike, Bus, Car, Crosshair, Truck } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { RouteMap, type MapRoute } from "@/components/mod/route-map";
+import { Screen } from "@/components/mod/ui";
+import { usePosition } from "@/hooks/use-position";
 import {
-  Screen,
-  PageTitle,
-  Meta,
-  PrimaryButton,
-  TextLink,
-  Group,
-  Label,
-} from "@/components/mod/ui";
-import { assignment, disruption, savedTrip } from "@/lib/mod-data";
+  fetchRoutes,
+  kilometres,
+  minutes,
+  type Point,
+  type RouteResponse,
+  type Vehicle,
+} from "@/lib/api";
+import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -17,153 +21,188 @@ export const Route = createFileRoute("/")({
       { title: "MOD — your route this morning" },
       {
         name: "description",
-        content:
-          "See whether the road ahead is disrupted and which alternative route is yours today.",
-      },
-      { property: "og:title", content: "MOD — your route this morning" },
-      {
-        property: "og:description",
-        content:
-          "See whether the road ahead is disrupted and which alternative route is yours today.",
+        content: "Which alternative route is yours when the road ahead is disrupted.",
       },
     ],
   }),
   component: Home,
 });
 
-type View = "disrupted" | "normal" | "none-available" | "loading" | "error";
+const ICON = { motorcycle: Bike, car: Car, bus: Bus, truck: Truck };
 
 function Home() {
-  const [view, setView] = useState<View>("disrupted");
-  const [accepted, setAccepted] = useState(false);
+  const navigate = useNavigate();
+  const position = usePosition(false);
+  const [vehicle, setVehicle] = useState<Vehicle>("motorcycle");
+  const [destination, setDestination] = useState(DEFAULT_DESTINATION);
+  const [result, setResult] = useState<RouteResponse | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+
+  const origin: Point | null = position.point;
+
+  useEffect(() => {
+    if (!origin) return;
+    let cancelled = false;
+    setState("loading");
+    fetchRoutes(origin, destination.point, vehicle)
+      .then((r) => {
+        if (cancelled) return;
+        setResult(r);
+        setState("idle");
+      })
+      .catch(() => !cancelled && setState("error"));
+    return () => {
+      cancelled = true;
+    };
+  }, [origin, destination, vehicle]);
+
+  const best = result?.routes[0];
+  const mapRoutes: MapRoute[] =
+    result?.routes.map((r, i) => ({
+      geometry: r.geometry,
+      tone: i === 0 ? ("assigned" as const) : ("other" as const),
+    })) ?? [];
 
   return (
     <Screen>
-      <div className="space-y-10">
-        <header className="space-y-2">
-          <Meta>{savedTrip.day}</Meta>
-          <PageTitle>
-            {savedTrip.from} to {savedTrip.to}
-          </PageTitle>
-          <Meta>
-            Usual departure {savedTrip.departure} · {savedTrip.usualDuration}
-          </Meta>
+      <div className="space-y-5">
+        <header className="flex items-baseline justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight sm:hidden">
+            MOD <span className="font-deva text-muted">मोड</span>
+          </h1>
+          <p className="text-base text-muted sm:text-lg">Where are you going?</p>
         </header>
 
-        {view === "loading" && (
-          <section className="space-y-3" aria-busy="true">
-            <p className="text-lg">Checking the roads on your route…</p>
-            <div className="h-4 w-3/4 rounded-md bg-surface" />
-            <div className="h-4 w-1/2 rounded-md bg-surface" />
+        {!origin && (
+          <section className="rounded-[6px] bg-surface p-4">
+            <h2 className="flex items-center gap-2 text-lg font-medium">
+              <Crosshair size={20} aria-hidden /> Find me
+            </h2>
+            <p className="mt-1 text-base text-muted">
+              {position.status === "denied"
+                ? "Location is blocked. Allow it in your browser settings to get a route from where you are."
+                : "MOD needs your position to work out which way you should go."}
+            </p>
+            <button
+              type="button"
+              onClick={position.ask}
+              className="mt-4 inline-flex min-h-11 items-center rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
+            >
+              {position.status === "asking" ? "Finding you…" : "Use my location"}
+            </button>
           </section>
         )}
 
-        {view === "error" && (
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold">We could not check your route just now</h2>
-            <Meta>
-              The connection dropped at 08:22. Nothing has been sent to you, so treat your usual
-              route as unchanged until this loads.
-            </Meta>
-            <PrimaryButton onClick={() => setView("disrupted")}>Try again</PrimaryButton>
-          </section>
-        )}
+        {origin && (
+          <section className="space-y-3">
+            <p className="text-sm text-muted">
+              You are here, to within {Math.round(position.accuracy ?? 0)} m.
+            </p>
 
-        {view === "normal" && (
-          <section className="space-y-6">
-            <h2 className="text-xl font-semibold">No disruptions on your route</h2>
-            <Meta>Last checked 08:22. Your usual way through Tinkune is clear.</Meta>
-            <div className="pt-2">
-              <TextLink to="/trip">Start trip</TextLink>
-            </div>
-          </section>
-        )}
-
-        {view === "none-available" && (
-          <section className="space-y-6">
-            <p className="text-alert">{disruption.headline}</p>
-            <h2 className="text-xl font-semibold">No alternative available</h2>
-            <Meta>
-              Every parallel road — Sinamangal, Old Baneshwor, Thapathali — is at a standstill as of
-              08:22. Waiting where you are is better than moving to another queue. We will advise
-              you when one clears.
-            </Meta>
-            <div className="pt-2">
-              <TextLink to="/how-it-works">How this works</TextLink>
-            </div>
-          </section>
-        )}
-
-        {view === "disrupted" && (
-          <section className="space-y-8">
-            <p className="text-alert">{disruption.headline}</p>
-
-            <div className="space-y-6">
-              <div className="space-y-1">
-                <h2 className="text-xl font-semibold sm:text-2xl">{assignment.route}</h2>
-                <p className="text-lg">{assignment.cost}</p>
-              </div>
-              <Meta>{assignment.reason}</Meta>
+            <div className="flex flex-wrap gap-2">
+              {VEHICLES.map(({ id, label }) => {
+                const Icon = ICON[id];
+                const on = vehicle === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setVehicle(id)}
+                    aria-pressed={on}
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-[6px] px-3 text-base ${
+                      on
+                        ? "bg-foreground text-inverse"
+                        : "bg-surface text-foreground hover:bg-surface-hover"
+                    }`}
+                  >
+                    <Icon size={18} aria-hidden />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
 
-            <Group>
-              <Label>Posted at {disruption.posted}</Label>
-              <p className="mt-1">
-                {savedTrip.from} to {savedTrip.to}, arriving {assignment.arrival}
-              </p>
-            </Group>
-
-            {accepted ? (
-              <p className="text-confirm">
-                Got it — you are on Old Baneshwor. Your trip has started.
-              </p>
-            ) : null}
-
-            <div className="space-y-4 pt-6">
-              <PrimaryButton onClick={() => setAccepted(true)}>Got it</PrimaryButton>
-              <div>
-                <TextLink to="/alternatives">Show other options</TextLink>
-              </div>
-              {accepted ? (
-                <div>
-                  <TextLink to="/trip">Open trip</TextLink>
-                </div>
-              ) : null}
-            </div>
-          </section>
-        )}
-
-        <nav className="space-y-2 border-t border-border pt-6">
-          <p className="text-base text-muted">Other states, for review</p>
-          <div className="flex flex-col gap-1">
-            {(
-              [
-                ["disrupted", "Disrupted route"],
-                ["normal", "No disruption"],
-                ["none-available", "No alternative available"],
-                ["loading", "Loading"],
-                ["error", "Could not check"],
-              ] as [View, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setView(key)}
-                className={`min-h-[2.75rem] rounded-md px-2 text-left text-base hover:bg-surface-hover ${
-                  view === key ? "bg-surface font-medium" : "text-muted"
-                }`}
+            <label className="block">
+              <span className="text-sm text-muted">Going to</span>
+              <select
+                value={destination.name}
+                onChange={(e) =>
+                  setDestination(PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION)
+                }
+                className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
               >
-                {label}
+                {PLACES.map((p) => (
+                  <option key={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </label>
+          </section>
+        )}
+
+        {state === "error" && (
+          <section className="rounded-[6px] bg-surface p-4">
+            <h2 className="text-lg font-medium">The route service did not answer</h2>
+            <p className="mt-1 text-base text-muted">
+              Nothing is wrong with your trip. Try again in a moment.
+            </p>
+          </section>
+        )}
+
+        {origin && state === "loading" && !result && (
+          <div className="h-[220px] w-full rounded-[6px] bg-surface" />
+        )}
+
+        {best && (
+          <>
+            <RouteMap routes={mapRoutes} label={`Route to ${destination.name}`} />
+
+            <section className="rounded-[6px] bg-surface p-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-lg font-medium">To {destination.name}</h2>
+                <span className="text-lg font-semibold">{minutes(best.seconds)}</span>
+              </div>
+              <p className="mt-1 text-base text-muted">
+                {kilometres(best.metres)} · free-flow estimate, not live traffic
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/trip" })}
+                className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
+              >
+                Start trip
               </button>
-            ))}
-          </div>
-          <div className="flex flex-col gap-1 pt-4">
-            <TextLink to="/onboarding">Onboarding</TextLink>
-            <TextLink to="/trip">Trip in progress</TextLink>
-            <TextLink to="/how-it-works">How it works</TextLink>
-            <TextLink to="/operator">Operator console</TextLink>
-          </div>
-        </nav>
+            </section>
+
+            {result.routes.length > 1 && (
+              <section className="space-y-2">
+                <h2 className="text-base font-medium">
+                  {result.routes.length - 1} other way
+                  {result.routes.length > 2 ? "s" : ""}
+                </h2>
+                {result.routes.slice(1).map((r, i) => (
+                  <div
+                    key={i}
+                    className="flex items-baseline justify-between rounded-[6px] bg-surface p-3"
+                  >
+                    <span className="text-base text-muted">Alternative {i + 1}</span>
+                    <span className="text-base">
+                      {minutes(r.seconds)} · {kilometres(r.metres)}
+                    </span>
+                  </div>
+                ))}
+              </section>
+            )}
+          </>
+        )}
+
+        {result && result.routes.length === 0 && (
+          <section className="rounded-[6px] bg-surface p-4">
+            <h2 className="text-lg font-medium">No route from here</h2>
+            <p className="mt-1 text-base text-muted">
+              You are outside the corridor MOD covers, which runs Tripureshwor to Koteshwor.
+            </p>
+          </section>
+        )}
       </div>
     </Screen>
   );

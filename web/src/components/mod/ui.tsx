@@ -2,9 +2,10 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 export function Screen({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
+  // pb-24 clears the phone tab bar; sm:pl-56 clears the desktop rail.
   return (
     <main
-      className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-12 ${
+      className={`mx-auto w-full px-4 pt-6 pb-24 sm:pt-10 sm:pb-12 sm:pl-56 sm:pr-6 ${
         wide ? "max-w-[75rem]" : "max-w-[45rem]"
       }`}
     >

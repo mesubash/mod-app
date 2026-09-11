@@ -9,6 +9,8 @@ import {
 } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 
+import { SideRail, TabBar } from "@/components/mod/nav";
+
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -121,8 +123,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <SideRail />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <TabBar />
     </QueryClientProvider>
   );
 }
