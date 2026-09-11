@@ -39,6 +39,9 @@ __pycache__/
 node_modules/
 web/dist/
 web/.vite/
+web/.output/
+web/.tanstack/
+web/.nitro/
 
 # --- Working standards, not repo content ---------------------------------
 # Binding for anyone building here, but kept out of the public repository the
