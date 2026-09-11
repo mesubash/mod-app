@@ -86,6 +86,33 @@ In Docker:
 docker compose up --build
 ```
 
+## The frontend
+
+TanStack Start on React 19, in `web/`. Needs [bun](https://bun.sh/).
+
+```sh
+cd web
+bun install
+bun run dev      # http://localhost:3000
+bun run build
+```
+
+Both halves at once, in two terminals:
+
+```sh
+MOD_CORS_ORIGINS=http://localhost:3000 uv run uvicorn api.main:app
+cd web && bun run dev
+```
+
+The browser calls the API directly in development, which is why the origin has
+to be allowed. A proxy would be tidier, but TanStack Start's router answers
+every path before Vite or nitro can forward one, so there is nothing to proxy
+through. In production nginx serves the built frontend and the API from one
+origin and `MOD_CORS_ORIGINS` stays unset.
+
+Screens still read fixed sample data from `web/src/lib/mod-data.ts`. Wiring
+them to `/route` is the next step.
+
 ## Status
 
 **Phase 1 of six is done** — the router runs as a service. See

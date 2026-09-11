@@ -84,3 +84,11 @@ def test_coordinates_are_validated(client):
         json={"origin": {"lon": 999, "lat": 0}, "destination": KOTESHWOR},
     )
     assert r.status_code == 422
+
+
+def test_no_cross_origin_access_unless_configured():
+    # Production serves both halves from one origin, so nothing should be
+    # allowed by default. MOD_CORS_ORIGINS opens it for the dev server only.
+    from api.main import CORS_ORIGINS
+
+    assert CORS_ORIGINS == []

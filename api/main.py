@@ -1,8 +1,10 @@
 """MOD routing API."""
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api import graph as graph_module
 from api.models import VEHICLES, RouteOption, RouteRequest, RouteResponse
@@ -21,6 +23,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MOD routing", version="0.1.0", lifespan=lifespan)
+
+# The frontend dev server runs on its own origin, and TanStack Start's router
+# answers every path before any Vite or nitro proxy sees it, so the browser
+# calls this API directly and needs permission to. In production nginx serves
+# both from one origin, which is why the default list is empty there.
+CORS_ORIGINS = [o for o in os.environ.get("MOD_CORS_ORIGINS", "").split(",") if o]
+if CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ORIGINS,
+        allow_methods=["GET", "POST"],
+        allow_headers=["content-type"],
+    )
 
 
 @app.get("/health")
