@@ -127,7 +127,9 @@ function Home() {
               <select
                 value={destination.name}
                 onChange={(e) =>
-                  setDestination(PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION)
+                  setDestination(
+                    PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION,
+                  )
                 }
                 className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
               >
