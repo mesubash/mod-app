@@ -40,6 +40,13 @@ node_modules/
 web/dist/
 web/.vite/
 
+# --- Working standards, not repo content ---------------------------------
+# Binding for anyone building here, but kept out of the public repository the
+# same way they are in the research repo. Hand them to a collaborator or an
+# agent directly.
+AI-GUARDRAILS.md
+UI-PROMPT.md
+
 # --- Local only -----------------------------------------------------------
 .idea/
 .vscode/
