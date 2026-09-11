@@ -1,0 +1,86 @@
+@import "tailwindcss" source(none);
+@source "../src";
+
+/*
+ * MOD design system. Monochrome; the ink is the brand.
+ * bg #fafafa, surface #f2f2f2 (hover #ebebeb), border #eaeaea (strong #d4d4d4),
+ * muted #666666, ink #171717, inverse #ffffff.
+ * Two single-line exceptions: alert #8a6d1f, confirm #2f6f4f.
+ */
+
+@theme inline {
+  --radius-sm: 6px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-inverse: var(--inverse);
+  --color-alert: var(--alert);
+  --color-confirm: var(--confirm);
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-deva: "IBM Plex Sans Devanagari", "IBM Plex Sans", sans-serif;
+}
+
+:root {
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.205 0 0);
+  --surface: oklch(0.961 0 0);
+  --surface-hover: oklch(0.937 0 0);
+  --border: oklch(0.933 0 0);
+  --border-strong: oklch(0.87 0 0);
+  --muted: oklch(0.556 0 0);
+  --inverse: oklch(1 0 0);
+  --alert: oklch(0.52 0.083 90);
+  --confirm: oklch(0.5 0.078 155);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3 {
+    line-height: 1.25;
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-foreground);
+    outline-offset: 2px;
+  }
+
+  button,
+  a,
+  input,
+  select {
+    transition:
+      background-color 170ms ease-out,
+      color 170ms ease-out,
+      border-color 170ms ease-out;
+  }
+}
+
+@utility deva {
+  font-family: var(--font-deva);
+}
