@@ -1,13 +1,46 @@
 .DS_Store
 
-# Python
-__pycache__/
-.venv/
-*.pyc
+# --- Never commit: user data --------------------------------------------
+# Probe traces are identifiable location data. A public repository is the
+# worst place for them, and a leak is not undone by deleting the file later.
+# See docs/product.md on aggregating before persisting.
+probes/
+traces/
+sessions/
+*.gpx
+*.trace
+data/probes*
+data/sessions*
+data/users*
 
-# Node
+# --- Never commit: secrets -----------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials*.json
+
+# --- Never commit: database ----------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+pgdata/
+
+# --- Build products -------------------------------------------------------
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
 node_modules/
 web/dist/
+web/.vite/
 
-# Local config
-.env
+# --- Local only -----------------------------------------------------------
+.idea/
+.vscode/
+*.local

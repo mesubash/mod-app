@@ -53,4 +53,8 @@ Nothing is built yet. The documents above are the plan.
 
 ## Licence
 
-MIT.
+MIT for the code (`LICENSE`).
+
+The road graph is a derived database from OpenStreetMap and carries ODbL
+share-alike terms instead. See [`DATA.md`](DATA.md) — this matters if you reuse
+it, and the product must credit OpenStreetMap on its "How it works" page.
