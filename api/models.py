@@ -40,3 +40,37 @@ class RouteResponse(BaseModel):
     routes: list[RouteOption]
     origin_node: str
     destination_node: str
+
+
+class ClosureRequest(BaseModel):
+    edges: list[str] = Field(min_length=1)
+    reason: str = Field(min_length=3, max_length=200)
+    kind: Literal["closure", "accident", "weather", "event"] = "closure"
+    minutes: int = Field(default=60, ge=5, le=720)
+
+
+class Closure(BaseModel):
+    id: int
+    edges: list[str]
+    reason: str
+    kind: str
+    starts: float
+    ends: float
+
+
+class ReportRequest(BaseModel):
+    kind: Literal["jam", "flood", "closed", "accident"]
+    at: Point
+
+
+class Report(BaseModel):
+    id: int
+    kind: str
+    lon: float
+    lat: float
+    created: float
+
+
+class TripAnswerRequest(BaseModel):
+    took_suggested: Literal["yes", "no", "partly"]
+    already_knew: Literal["yes", "no"]
