@@ -1,0 +1,13 @@
+.DS_Store
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+
+# Node
+node_modules/
+web/dist/
+
+# Local config
+.env
