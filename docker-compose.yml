@@ -1,0 +1,17 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    # The target VPS runs other services that matter more than this one and
+    # has about 3 GB free. The API sits near 100 MB; the cap is headroom, not
+    # a target, and exists so a leak here cannot starve them.
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

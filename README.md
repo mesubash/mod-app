@@ -51,9 +51,49 @@ What the study established, and this product is built on:
   morning peak is a plateau, not a spike, so moving trips to an adjacent hour
   moves them into an hour that is already as busy.
 
+## Running it
+
+Needs [uv](https://docs.astral.sh/uv/).
+
+```sh
+uv sync
+uv run uvicorn api.main:app --reload
+uv run pytest
+```
+
+One endpoint:
+
+```sh
+curl -X POST localhost:8000/route -H 'content-type: application/json' -d '{
+  "origin":      {"lon": 85.3140, "lat": 27.6929},
+  "destination": {"lon": 85.3495, "lat": 27.6785},
+  "vehicle":     "motorcycle",
+  "closed":      []
+}'
+```
+
+Returns the quickest route and up to five alternatives, each with its edge
+ids, free-flow seconds, metres, and the junction coordinates to draw it. An
+empty list is a real answer: the graph keeps disconnected pieces, and a
+closure can leave no way through.
+
+`vehicle` is one of `motorcycle`, `car`, `bus`, `truck`, and it changes the
+answer — 488 edges in the corridor are open to a motorcycle and not a car.
+
+In Docker:
+
+```sh
+docker compose up --build
+```
+
 ## Status
 
-Nothing is built yet. The documents above are the plan.
+**Phase 1 of six is done** — the router runs as a service. See
+[`docs/phases.md`](docs/phases.md) for what the rest are and why they are in
+that order.
+
+Measured on the corridor graph: 4.7 ms for one route, 14.7 ms for three
+alternatives, 22 ms end to end over HTTP. About 54 MB resident.
 
 ## Licence
 
