@@ -1,9 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
-import { Console } from "@/components/mod/console";
-import { Meta, PageTitle, PrimaryButton } from "@/components/mod/ui";
-import { disruptionKinds, durations, segmentMatches, segments } from "@/lib/mod-data";
+import { RouteMap, type MapRoute } from "@/components/mod/route-map";
+import {
+  clearClosure,
+  fetchRoutes,
+  getClosures,
+  postClosure,
+  until,
+  type Closure,
+} from "@/lib/api";
+import { PLACES } from "@/lib/places";
 
 export const Route = createFileRoute("/operator/")({
   head: () => ({
@@ -11,169 +18,215 @@ export const Route = createFileRoute("/operator/")({
       { title: "Post a disruption — MOD operator console" },
       {
         name: "description",
-        content:
-          "Select the affected segment, the type and the expected duration, then publish it to the travellers on that road.",
-      },
-      { property: "og:title", content: "Post a disruption — MOD operator console" },
-      {
-        property: "og:description",
-        content:
-          "Select the affected segment, the type and the expected duration, then publish it to the travellers on that road.",
+        content: "Close a link and see what it does to the travellers on that road.",
       },
     ],
   }),
-  component: PostDisruption,
+  component: Operator,
 });
 
-const field =
-  "min-h-[2.75rem] w-full max-w-[28rem] rounded-md bg-surface px-3 py-3 text-base text-foreground";
+const KINDS = ["closure", "accident", "weather", "event"] as const;
+const TOKEN_KEY = "mod.operator.token";
 
-type Status = "editing" | "publishing" | "published" | "failed";
+function Operator() {
+  const [token, setToken] = useState("");
+  const [from, setFrom] = useState(PLACES[2]!);
+  const [to, setTo] = useState(PLACES[PLACES.length - 1]!);
+  const [edges, setEdges] = useState<string[]>([]);
+  const [geometry, setGeometry] = useState<[number, number][]>([]);
+  const [pick, setPick] = useState<number | null>(null);
+  const [reason, setReason] = useState("VIP movement");
+  const [kind, setKind] = useState<(typeof KINDS)[number]>("closure");
+  const [minutes, setMinutes] = useState(60);
+  const [active, setActive] = useState<Closure[]>([]);
+  const [note, setNote] = useState<string | null>(null);
 
-function PostDisruption() {
-  const [segment, setSegment] = useState("");
-  const [kind, setKind] = useState("");
-  const [duration, setDuration] = useState("");
-  const [status, setStatus] = useState<Status>("editing");
-  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setToken(localStorage.getItem(TOKEN_KEY) ?? "");
+  }, []);
 
-  const matched = segment ? segmentMatches[segment] : undefined;
+  const refresh = () =>
+    getClosures()
+      .then(setActive)
+      .catch(() => setActive([]));
+  useEffect(() => {
+    refresh();
+  }, []);
 
-  if (status === "published") {
-    return (
-      <Console current="/operator">
-        <div className="max-w-[80ch] space-y-6">
-          <PageTitle>Disruption published</PageTitle>
-          <p className="text-lg">
-            {segment} — {kind.toLowerCase()}, {duration.toLowerCase()}. Published at 08:22.
-          </p>
-          <p className="text-lg">
-            {matched} travellers have a saved trip through {segment} at this hour. They are being
-            assigned across the alternatives now; no single road takes the whole diversion.
-          </p>
-          <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2">
-            <PrimaryButton onClick={() => setStatus("editing")}>Post another</PrimaryButton>
-          </div>
-        </div>
-      </Console>
-    );
+  // Closing a link means naming an edge, and an operator has no edge ids in
+  // their head. Routing between two junctions gives a concrete list to choose
+  // from, which is the nearest thing to pointing at the map.
+  useEffect(() => {
+    fetchRoutes(from.point, to.point, "car")
+      .then((r) => {
+        setEdges(r.routes[0]?.edges ?? []);
+        setGeometry(r.routes[0]?.geometry ?? []);
+        setPick(r.routes[0] ? Math.floor(r.routes[0].edges.length / 2) : null);
+      })
+      .catch(() => setEdges([]));
+  }, [from, to]);
+
+  async function publish() {
+    if (pick === null || !edges[pick]) return;
+    try {
+      await postClosure(token, { edges: [edges[pick]], reason, kind, minutes });
+      localStorage.setItem(TOKEN_KEY, token);
+      setNote("Published. Travellers routing through that link are already avoiding it.");
+      refresh();
+    } catch {
+      setNote("Not published. Check the operator token.");
+    }
   }
 
+  const mapRoutes: MapRoute[] = geometry.length ? [{ geometry, tone: "closed" }] : [];
+
   return (
-    <Console current="/operator">
-      <form
-        className="max-w-[80ch] space-y-8"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!segment || !kind || !duration) {
-            setError("Choose a segment, a type and an expected duration before publishing.");
-            return;
-          }
-          setError(null);
-          setStatus("publishing");
-          window.setTimeout(() => setStatus("published"), 600);
-        }}
-      >
-        <header className="space-y-2">
-          <PageTitle>Post a disruption</PageTitle>
-          <Meta>
-            Travellers with a saved trip through the segment are advised within a minute of
-            publishing.
-          </Meta>
-        </header>
+    <main className="mx-auto w-full max-w-[75rem] px-4 py-8 sm:px-6">
+      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-3 border-b border-border pb-4">
+        <h1 className="text-xl font-semibold tracking-tight">
+          MOD <span className="font-deva text-muted">मोड</span>{" "}
+          <span className="font-normal text-muted">operator console</span>
+        </h1>
+        <nav className="flex gap-4 text-base">
+          <Link to="/operator/live" className="underline underline-offset-4">
+            Live
+          </Link>
+          <Link to="/operator/conditions" className="underline underline-offset-4">
+            Reported conditions
+          </Link>
+        </nav>
+      </header>
 
-        <div className="space-y-2">
-          <label htmlFor="segment" className="block text-lg font-semibold">
-            Affected road segment
-          </label>
-          <select
-            id="segment"
-            value={segment}
-            onChange={(e) => setSegment(e.target.value)}
-            className={field}
-          >
-            <option value="">Choose a segment</option>
-            {segments.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <Meta>
-            {matched === undefined
-              ? "No segment chosen yet."
-              : `${matched} travellers have a saved trip through ${segment} at this hour.`}
-          </Meta>
-        </div>
+      <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
+        <section className="space-y-4">
+          <h2 className="text-lg font-medium">Post a disruption</h2>
 
-        <fieldset className="space-y-2">
-          <legend className="text-lg font-semibold">Type</legend>
-          <div className="flex flex-wrap gap-x-6 gap-y-1">
-            {disruptionKinds.map((k) => (
-              <label
-                key={k}
-                className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-md px-1 text-base"
+          <div className="flex flex-wrap gap-3">
+            <label className="text-sm text-muted">
+              From
+              <select
+                value={from.name}
+                onChange={(e) => setFrom(PLACES.find((p) => p.name === e.target.value) ?? from)}
+                className="mt-1 block min-h-11 rounded-[6px] border border-border bg-background px-3 text-base"
               >
-                <input
-                  type="radio"
-                  name="kind"
-                  value={k}
-                  checked={kind === k}
-                  onChange={() => setKind(k)}
-                  className="size-4 accent-foreground"
-                />
-                {k}
-              </label>
-            ))}
+                {PLACES.map((p) => (
+                  <option key={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm text-muted">
+              To
+              <select
+                value={to.name}
+                onChange={(e) => setTo(PLACES.find((p) => p.name === e.target.value) ?? to)}
+                className="mt-1 block min-h-11 rounded-[6px] border border-border bg-background px-3 text-base"
+              >
+                {PLACES.map((p) => (
+                  <option key={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </label>
           </div>
-        </fieldset>
 
-        <div className="space-y-2">
-          <label htmlFor="duration" className="block text-lg font-semibold">
-            Expected duration
-          </label>
-          <select
-            id="duration"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className={field}
-          >
-            <option value="">Choose a duration</option>
-            {durations.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-          <Meta>
-            Travellers are told this as an estimate. It can be changed while the disruption is live.
-          </Meta>
-        </div>
+          {geometry.length > 0 && (
+            <RouteMap routes={mapRoutes} height={240} label={`${from.name} to ${to.name}`} />
+          )}
 
-        {error ? <p role="alert">{error}</p> : null}
-
-        {status === "failed" ? (
-          <p role="alert">
-            The disruption did not publish — the console lost its connection at 08:22. Nothing was
-            sent to travellers. Publish again when it returns.
-          </p>
-        ) : null}
-
-        <div className="space-y-4 pt-2">
-          <PrimaryButton type="submit" disabled={status === "publishing"}>
-            {status === "publishing" ? "Publishing…" : "Publish"}
-          </PrimaryButton>
-          <div>
-            <button
-              type="button"
-              onClick={() => setStatus("failed")}
-              className="min-h-[2.75rem] rounded-md px-1 text-base text-muted underline underline-offset-4 hover:bg-surface-hover"
+          <label className="block text-sm text-muted">
+            Link to close ({edges.length} on this route)
+            <select
+              value={pick ?? ""}
+              onChange={(e) => setPick(Number(e.target.value))}
+              className="mt-1 block min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
             >
-              Show publish failure state
-            </button>
+              {edges.map((edge, i) => (
+                <option key={edge} value={i}>
+                  {i + 1}. {edge}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="flex flex-wrap gap-3">
+            <label className="flex-1 text-sm text-muted">
+              Reason
+              <input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="mt-1 block min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
+              />
+            </label>
+            <label className="text-sm text-muted">
+              Type
+              <select
+                value={kind}
+                onChange={(e) => setKind(e.target.value as typeof kind)}
+                className="mt-1 block min-h-11 rounded-[6px] border border-border bg-background px-3 text-base"
+              >
+                {KINDS.map((k) => (
+                  <option key={k}>{k}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm text-muted">
+              Minutes
+              <input
+                type="number"
+                min={5}
+                max={720}
+                value={minutes}
+                onChange={(e) => setMinutes(Number(e.target.value))}
+                className="mt-1 block min-h-11 w-24 rounded-[6px] border border-border bg-background px-3 text-base"
+              />
+            </label>
           </div>
-        </div>
-      </form>
-    </Console>
+
+          <label className="block text-sm text-muted">
+            Operator token
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              className="mt-1 block min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={publish}
+            disabled={pick === null || !token}
+            className="inline-flex min-h-11 items-center rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse disabled:opacity-40"
+          >
+            Publish disruption
+          </button>
+
+          {note && <p className="text-base text-muted">{note}</p>}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-medium">Active now</h2>
+          {active.length === 0 && <p className="text-base text-muted">Nothing is shut.</p>}
+          {active.map((c) => (
+            <div key={c.id} className="rounded-[6px] bg-surface p-3">
+              <p className="text-base font-medium">{c.reason}</p>
+              <p className="mt-1 text-sm text-muted">
+                {c.kind} · {c.edges.length} link · clears in {until(c.ends)}
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  clearClosure(token, c.id)
+                    .then(refresh)
+                    .catch(() => setNote("Could not clear. Check the token."))
+                }
+                className="mt-2 text-base underline underline-offset-4"
+              >
+                Clear now
+              </button>
+            </div>
+          ))}
+        </section>
+      </div>
+    </main>
   );
 }

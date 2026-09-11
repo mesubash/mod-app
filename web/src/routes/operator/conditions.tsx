@@ -1,9 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
-import { Cell, Console } from "@/components/mod/console";
-import { Meta, PageTitle, PrimaryButton } from "@/components/mod/ui";
-import { reportedConditions } from "@/lib/mod-data";
+import { getReports, type Report } from "@/lib/api";
 
 export const Route = createFileRoute("/operator/conditions")({
   head: () => ({
@@ -11,166 +9,93 @@ export const Route = createFileRoute("/operator/conditions")({
       { title: "Reported conditions — MOD operator console" },
       {
         name: "description",
-        content:
-          "What travellers are reporting right now, with the current flow on each link before anything is closed.",
-      },
-      { property: "og:title", content: "Reported conditions — MOD operator console" },
-      {
-        property: "og:description",
-        content:
-          "What travellers are reporting right now, with the current flow on each link before anything is closed.",
+        content: "What travellers are reporting on the corridor right now.",
       },
     ],
   }),
   component: Conditions,
 });
 
-type View = "reports" | "empty" | "loading" | "error";
+const LABEL: Record<Report["kind"], string> = {
+  jam: "Heavy jam",
+  flood: "Flooding",
+  closed: "Road closed",
+  accident: "Accident",
+};
 
-// A link already at a standstill cannot be emptied by closing it, so the
-// console states that instead of offering the action.
-const STOPPED_VEH_PER_HOUR = 100;
+function ago(created: number): string {
+  const mins = Math.round((Date.now() - created * 1000) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  return `${Math.round(mins / 60)} h ago`;
+}
 
 function Conditions() {
-  const [view, setView] = useState<View>("reports");
-  const [closed, setClosed] = useState<string | null>(null);
+  const [reports, setReports] = useState<Report[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const load = () =>
+      getReports()
+        .then(setReports)
+        .catch(() => setFailed(true));
+    load();
+    // Reports are the only live signal there is. A duty officer leaves this
+    // open on a desk, so it refreshes rather than waiting to be reloaded.
+    const timer = setInterval(load, 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
-    <Console current="/operator/conditions">
-      <div className="space-y-8">
-        <header className="space-y-2">
-          <PageTitle>Reported conditions</PageTitle>
-          <Meta>
-            Sent by travellers on the road, newest first. Flow is measured on the link, not
-            reported.
-          </Meta>
-        </header>
-
-        {view === "loading" && (
-          <section className="space-y-3" aria-busy="true">
-            <p className="text-lg">Loading reports…</p>
-            <div className="h-4 w-3/4 max-w-[28rem] rounded-md bg-surface" />
-            <div className="h-4 w-2/3 max-w-[24rem] rounded-md bg-surface" />
-            <div className="h-4 w-1/2 max-w-[20rem] rounded-md bg-surface" />
-          </section>
-        )}
-
-        {view === "error" && (
-          <section className="max-w-[80ch] space-y-4">
-            <h2 className="text-lg font-semibold">Reports are not coming through</h2>
-            <Meta>
-              The last report reached the console at 08:24. Travellers may still be reporting; this
-              list is not current, so do not treat it as quiet.
-            </Meta>
-            <PrimaryButton onClick={() => setView("reports")}>Try again</PrimaryButton>
-          </section>
-        )}
-
-        {view === "empty" && (
-          <section className="max-w-[80ch] space-y-4">
-            <h2 className="text-lg font-semibold">Nothing reported in the last hour</h2>
-            <Meta>
-              The corridor is running normally. Reports appear here within seconds of being sent.
-            </Meta>
-          </section>
-        )}
-
-        {view === "reports" && (
-          <section className="space-y-3">
-            <table className="w-full text-base max-sm:block">
-              <thead className="max-sm:hidden">
-                <tr className="border-b border-border text-left text-muted">
-                  <th scope="col" className="py-2 font-normal sm:px-3 sm:first:pl-0">
-                    What
-                  </th>
-                  <th scope="col" className="py-2 font-normal sm:px-3">
-                    Where
-                  </th>
-                  <th scope="col" className="py-2 font-normal sm:px-3">
-                    Reports
-                  </th>
-                  <th scope="col" className="py-2 font-normal sm:px-3">
-                    Last report
-                  </th>
-                  <th scope="col" className="py-2 font-normal sm:px-3">
-                    Flow now
-                  </th>
-                  <th scope="col" className="py-2 font-normal sm:px-3">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="max-sm:block">
-                {reportedConditions.map((row) => {
-                  const stopped = row.flow < STOPPED_VEH_PER_HOUR;
-                  return (
-                    <tr
-                      key={`${row.what}-${row.where}`}
-                      className="border-b border-border max-sm:block max-sm:py-3"
-                    >
-                      <Cell label="What">
-                        <span className="font-medium">{row.what}</span>
-                      </Cell>
-                      <Cell label="Where">{row.where}</Cell>
-                      <Cell label="Reports">{row.reports}</Cell>
-                      <Cell label="Last report">{row.when}</Cell>
-                      <Cell label="Flow now">
-                        {row.flow} veh/h, {row.flowNote}
-                      </Cell>
-                      <Cell label="Action">
-                        {stopped ? (
-                          <span className="text-muted">
-                            Already stopped — closing it removes nothing
-                          </span>
-                        ) : closed === row.where ? (
-                          <span className="text-confirm">Closed at 08:46</span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setClosed(row.where)}
-                            className="min-h-[2.75rem] rounded-md px-1 text-left font-medium underline underline-offset-4 hover:bg-surface-hover"
-                          >
-                            Close this link
-                          </button>
-                        )}
-                      </Cell>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <Meta>
-              Closing a link posts a disruption on it and reassigns everyone routed through it. Two
-              links carrying under 100 veh/h are left alone: they are already stopped.
-            </Meta>
-          </section>
-        )}
-
-        <nav className="space-y-2 border-t border-border pt-6">
-          <p className="text-base text-muted">Other states, for review</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {(
-              [
-                ["reports", "Reports coming in"],
-                ["empty", "Nothing reported"],
-                ["loading", "Loading"],
-                ["error", "Not receiving"],
-              ] as [View, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setView(key)}
-                className={`min-h-[2.75rem] rounded-md px-2 text-base hover:bg-surface-hover ${
-                  view === key ? "bg-surface font-medium" : "text-muted"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+    <main className="mx-auto w-full max-w-[75rem] px-4 py-8 sm:px-6">
+      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-3 border-b border-border pb-4">
+        <h1 className="text-xl font-semibold tracking-tight">
+          Reported conditions <span className="font-normal text-muted">last two hours</span>
+        </h1>
+        <nav className="flex gap-4 text-base">
+          <Link to="/operator" className="underline underline-offset-4">
+            Post a disruption
+          </Link>
+          <Link to="/operator/live" className="underline underline-offset-4">
+            Live
+          </Link>
         </nav>
-      </div>
-    </Console>
+      </header>
+
+      <p className="mb-6 max-w-[60ch] text-base text-muted">
+        These come from travellers, one tap each. Until probe collection exists they are the only
+        thing the system knows about the roads in real time, so they are unverified by design. The
+        console does not decide what to act on.
+      </p>
+
+      {failed && <p className="text-base text-alert">The service did not answer.</p>}
+
+      {reports && reports.length === 0 && (
+        <p className="text-base text-muted">Nothing reported in the last two hours.</p>
+      )}
+
+      {reports && reports.length > 0 && (
+        <table className="w-full max-w-[50rem] border-collapse text-base">
+          <thead>
+            <tr className="border-b border-border text-left text-sm text-muted">
+              <th className="py-2 pr-4 font-normal">What</th>
+              <th className="py-2 pr-4 font-normal">Where</th>
+              <th className="py-2 font-normal">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((r) => (
+              <tr key={r.id} className="border-b border-border">
+                <td className="py-2 pr-4">{LABEL[r.kind]}</td>
+                <td className="py-2 pr-4 text-muted">
+                  {r.lat.toFixed(4)}, {r.lon.toFixed(4)}
+                </td>
+                <td className="py-2 text-muted">{ago(r.created)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </main>
   );
 }
