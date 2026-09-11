@@ -74,3 +74,28 @@ class Report(BaseModel):
 class TripAnswerRequest(BaseModel):
     took_suggested: Literal["yes", "no", "partly"]
     already_knew: Literal["yes", "no"]
+
+
+class PingIn(BaseModel):
+    lon: float = Field(ge=-180, le=180)
+    lat: float = Field(ge=-90, le=90)
+    at: float
+
+
+class ProbeRequest(BaseModel):
+    """A short run of positions from one trip.
+
+    Sent in batches rather than one at a time: a request per ping would cost
+    the traveller battery and mobile data for no gain.
+    """
+
+    pings: list[PingIn] = Field(min_length=2, max_length=120)
+
+
+class Coverage(BaseModel):
+    window_minutes: int
+    observations: int
+    edges_with_data: int
+    edges_total: int
+    share_of_network: float
+    usable: bool

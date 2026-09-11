@@ -32,6 +32,17 @@ CREATE TABLE IF NOT EXISTS reports (
     created REAL    NOT NULL
 );
 
+-- Speed observations. Deliberately has no traveller column: the matcher
+-- discards the trace inside the request and only these survive.
+CREATE TABLE IF NOT EXISTS edge_speeds (
+    id     INTEGER PRIMARY KEY,
+    edge   TEXT    NOT NULL,
+    speed  REAL    NOT NULL,
+    at     REAL    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS edge_speeds_recent ON edge_speeds (at);
+
 -- Answers to the two after-trip questions. No traveller identity is stored:
 -- the questions are about the guidance, not about the person.
 CREATE TABLE IF NOT EXISTS trip_answers (
@@ -119,3 +130,50 @@ def answer_summary(db) -> dict:
         "took_suggested": sum(1 for r in rows if r["took_suggested"] == "yes"),
         "already_knew": sum(1 for r in rows if r["already_knew"] == "yes"),
     }
+
+
+def add_speeds(db, observations) -> int:
+    db.executemany(
+        "INSERT INTO edge_speeds (edge, speed, at) VALUES (?, ?, ?)",
+        [(o.edge, o.speed, o.at) for o in observations],
+    )
+    db.commit()
+    return len(observations)
+
+
+def edge_speed_coverage(db, within_minutes: int = 15) -> dict:
+    """How much of the network currently has measured speed.
+
+    This is the number Phase 3 exists to produce. Until it is high enough,
+    routing on measured speed is not possible and the product says so.
+    """
+    since = time.time() - within_minutes * 60
+    row = db.execute(
+        "SELECT COUNT(*) AS observations, COUNT(DISTINCT edge) AS edges"
+        " FROM edge_speeds WHERE at >= ?",
+        (since,),
+    ).fetchone()
+    return {
+        "window_minutes": within_minutes,
+        "observations": row["observations"],
+        "edges_with_data": row["edges"],
+    }
+
+
+def median_speeds(db, within_minutes: int = 15) -> dict[str, float]:
+    """Median observed speed per edge, for the edges that have any."""
+    since = time.time() - within_minutes * 60
+    rows = db.execute(
+        "SELECT edge, speed FROM edge_speeds WHERE at >= ? ORDER BY edge", (since,)
+    ).fetchall()
+    by_edge: dict[str, list[float]] = {}
+    for r in rows:
+        by_edge.setdefault(r["edge"], []).append(r["speed"])
+    out = {}
+    for edge, speeds in by_edge.items():
+        speeds.sort()
+        mid = len(speeds) // 2
+        out[edge] = (
+            speeds[mid] if len(speeds) % 2 else (speeds[mid - 1] + speeds[mid]) / 2
+        )
+    return out

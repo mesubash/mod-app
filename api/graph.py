@@ -35,6 +35,20 @@ class Graph:
                 return vclass in arc.classes
         return False
 
+    def edge_between(self, tail: str, head: str) -> str | None:
+        """The edge joining two nodes in that direction, if there is one."""
+        for arc in self.arcs.get(tail, ()):
+            if arc.to == head:
+                return arc.edge
+        return None
+
+    def edge_length(self, edge: str) -> float:
+        tail = self.edge_nodes[edge][0]
+        for arc in self.arcs.get(tail, ()):
+            if arc.edge == edge:
+                return arc.metres
+        raise KeyError(edge)
+
     def nearest_node(self, lon: float, lat: float) -> str:
         """Snap a coordinate to the closest node that has outgoing arcs.
 

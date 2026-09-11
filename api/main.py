@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import graph as graph_module
-from api import store
+from api import probes, store
 from api.models import (
     VEHICLES,
     Closure,
@@ -16,6 +16,8 @@ from api.models import (
     ReportRequest,
     RouteOption,
     RouteRequest,
+    Coverage,
+    ProbeRequest,
     RouteResponse,
     TripAnswerRequest,
 )
@@ -185,3 +187,41 @@ def post_trip_answer(request: TripAnswerRequest) -> dict[str, int]:
 @app.get("/trip-answers/summary")
 def trip_answer_summary() -> dict[str, int]:
     return store.answer_summary(DB)
+
+
+@app.post("/probes")
+def post_probes(request: ProbeRequest) -> dict[str, int]:
+    """Positions from a trip in progress, turned into speed on a road.
+
+    The pings are matched and discarded inside this request. What is stored
+    is an anonymous speed per edge, with nothing recording whose trip it came
+    from. That is a deliberate choice made before there was any data to
+    regret: a pipeline that never persists an identifiable trace is far easier
+    to defend than one that deletes them afterwards.
+    """
+    observed = probes.match(
+        GRAPH, [probes.Ping(p.lon, p.lat, p.at) for p in request.pings]
+    )
+    store.add_speeds(DB, observed)
+    return {"matched": len(observed), "sent": len(request.pings)}
+
+
+@app.get("/coverage")
+def coverage(minutes: int = 15) -> Coverage:
+    """How much of the network has measured speed right now.
+
+    Phase 3 exists to produce this number. Until it is meaningfully above
+    zero, routing on measured speed is not possible and the product says
+    free-flow instead of pretending.
+    """
+    counted = store.edge_speed_coverage(DB, minutes)
+    total = len(GRAPH.edge_nodes)
+    share = counted["edges_with_data"] / total if total else 0.0
+    return Coverage(
+        **counted,
+        edges_total=total,
+        share_of_network=round(share, 5),
+        # Nothing routes on this yet. The threshold is a placeholder for a
+        # decision Phase 4 has to make with real numbers in front of it.
+        usable=False,
+    )
