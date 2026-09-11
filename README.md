@@ -100,15 +100,18 @@ bun run build
 Both halves at once, in two terminals:
 
 ```sh
-MOD_CORS_ORIGINS=http://localhost:3000 uv run uvicorn api.main:app
-cd web && bun run dev
+uv run uvicorn api.main:app          # or: docker compose up --build
+cd web && bun run dev                # http://localhost:3000
 ```
 
-The browser calls the API directly in development, which is why the origin has
-to be allowed. A proxy would be tidier, but TanStack Start's router answers
-every path before Vite or nitro can forward one, so there is nothing to proxy
-through. In production nginx serves the built frontend and the API from one
-origin and `MOD_CORS_ORIGINS` stays unset.
+Nothing to configure: the API allows localhost origins by default. The browser
+calls it directly rather than through a proxy, because TanStack Start's router
+answers every path before Vite or nitro can forward one. In production, serve
+both halves from one origin behind nginx and set `MOD_CORS_ORIGINS` to that
+origin, or to an empty string to allow none.
+
+Posting closures needs `MOD_OPERATOR_TOKEN` set, and the same value entered in
+the operator console at `/operator`.
 
 Screens still read fixed sample data from `web/src/lib/mod-data.ts`. Wiring
 them to `/route` is the next step.
