@@ -17,13 +17,17 @@ The name is the Nepali **मोड** — a turn, a bend in the road.
 | [`docs/phases.md`](docs/phases.md) | Build order, and what "done" means for each phase |
 | [`docs/architecture.md`](docs/architecture.md) | Folder layout and the decisions behind it |
 | [`docs/graph-format.md`](docs/graph-format.md) | The road graph file the router reads |
-| [`AI-GUARDRAILS.md`](AI-GUARDRAILS.md) | Binding rules for any code or document written here |
-| [`UI-PROMPT.md`](UI-PROMPT.md) | Binding design spec for the frontend |
 
-**If you are an AI agent working in this repository, read `AI-GUARDRAILS.md`
-and `docs/product.md` before writing anything.** The product carries claims that
-are constrained by published research, and several obvious-looking features are
-forbidden for measured reasons.
+**Read [`docs/product.md`](docs/product.md) before writing anything.** The
+product's claims are constrained by published research, and several
+obvious-looking features are forbidden for measured reasons rather than
+stylistic ones.
+
+Two further documents are binding but not kept in this repository:
+`AI-GUARDRAILS.md`, the coding and writing standard, and `UI-PROMPT.md`, the
+frontend design spec. They are working documents rather than repo content, held
+the same way in the research repo. Ask for them before building anything here;
+the frontend in particular cannot be built correctly without the second.
 
 ## Where this comes from
 

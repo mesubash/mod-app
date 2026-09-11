@@ -53,7 +53,7 @@ The first shippable product. Works with zero live-traffic data.
   it — closing a road that is already stopped removes nothing.
 - Traveller app: onboarding, home (normal and disrupted), alternatives,
   after-trip questions. Screens are specified in `UI-PROMPT.md`, which is
-  binding.
+  binding and is held outside this repository -- ask for it.
 - After-trip questions, one tap each: *did you take the suggested route?* and
   *did you already know this route?*
 
