@@ -27,9 +27,8 @@ mod-app/
 │       ├── lib/                api client, shared state
 │       └── styles/tokens.css   the locked palette, one file
 │
-├── tests/
-└── deploy/
-    └── Dockerfile
+├── Dockerfile
+└── tests/
 ```
 
 Later phases add `api/probes.py`, `api/sessions.py`, `api/assignment.py` and a
