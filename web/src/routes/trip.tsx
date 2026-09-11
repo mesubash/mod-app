@@ -51,10 +51,15 @@ function Trip() {
   const position = usePosition(running);
   const [vehicle, setVehicle] = useState<Vehicle>("motorcycle");
   const [destination, setDestination] = useState(DEFAULT_DESTINATION);
+  // Same reason as the home screen: a start point can be chosen, so the app
+  // works from outside Kathmandu. Real position still drives progress once
+  // the trip is running.
+  const [from, setFrom] = useState(PLACES[2]!);
+  const [useDevice, setUseDevice] = useState(false);
   const [route, setRoute] = useState<RouteOption | null>(null);
   const [failed, setFailed] = useState(false);
 
-  const here = position.point;
+  const here = useDevice ? position.point : (position.point ?? from.point);
 
   // Route once, when the trip starts. Re-routing on every position update is
   // what makes an app flip-flop; re-advice belongs behind a threshold, and
@@ -97,6 +102,26 @@ function Trip() {
               </button>
             ))}
           </div>
+
+          <label className="block">
+            <span className="text-sm text-muted">Starting from</span>
+            <select
+              value={useDevice ? "__device__" : from.name}
+              onChange={(e) => {
+                if (e.target.value === "__device__") setUseDevice(true);
+                else {
+                  setUseDevice(false);
+                  setFrom(PLACES.find((p) => p.name === e.target.value) ?? from);
+                }
+              }}
+              className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
+            >
+              {PLACES.map((p) => (
+                <option key={p.name}>{p.name}</option>
+              ))}
+              <option value="__device__">Where I am now</option>
+            </select>
+          </label>
 
           <label className="block">
             <span className="text-sm text-muted">Going to</span>

@@ -38,6 +38,11 @@ function Home() {
   const position = usePosition(false);
   const [vehicle, setVehicle] = useState<Vehicle>("motorcycle");
   const [destination, setDestination] = useState(DEFAULT_DESTINATION);
+  // Most of the corridor's testers are not standing on it. Picking a start
+  // point keeps the app usable from anywhere; real position is the option,
+  // not the requirement.
+  const [from, setFrom] = useState(PLACES[2]!);
+  const [useDevice, setUseDevice] = useState(false);
   const [result, setResult] = useState<RouteResponse | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const [closures, setClosures] = useState<Closure[]>([]);
@@ -50,7 +55,7 @@ function Home() {
       .catch(() => setClosures([]));
   }, []);
 
-  const origin: Point | null = position.point;
+  const origin: Point | null = useDevice ? position.point : from.point;
 
   useEffect(() => {
     if (!origin) return;
@@ -101,73 +106,78 @@ function Home() {
           </section>
         )}
 
-        {!origin && (
-          <section className="rounded-[6px] bg-surface p-4">
-            <h2 className="flex items-center gap-2 text-lg font-medium">
-              <Crosshair size={20} aria-hidden /> Find me
-            </h2>
-            <p className="mt-1 text-base text-muted">
-              {position.status === "denied"
-                ? "Location is blocked. Allow it in your browser settings to get a route from where you are."
-                : "MOD needs your position to work out which way you should go."}
-            </p>
-            <button
-              type="button"
-              onClick={position.ask}
-              className="mt-4 inline-flex min-h-11 items-center rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
-            >
-              {position.status === "asking" ? "Finding you…" : "Use my location"}
-            </button>
-          </section>
-        )}
-
-        {origin && (
-          <section className="space-y-3">
-            <p className="text-sm text-muted">
-              You are here, to within {Math.round(position.accuracy ?? 0)} m.
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {VEHICLES.map(({ id, label }) => {
-                const Icon = ICON[id];
-                const on = vehicle === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setVehicle(id)}
-                    aria-pressed={on}
-                    className={`inline-flex min-h-11 items-center gap-2 rounded-[6px] px-3 text-base ${
-                      on
-                        ? "bg-foreground text-inverse"
-                        : "bg-surface text-foreground hover:bg-surface-hover"
-                    }`}
-                  >
-                    <Icon size={18} aria-hidden />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <label className="block">
-              <span className="text-sm text-muted">Going to</span>
-              <select
-                value={destination.name}
-                onChange={(e) =>
-                  setDestination(
-                    PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION,
-                  )
+        <section className="space-y-3">
+          <label className="block">
+            <span className="text-sm text-muted">Starting from</span>
+            <select
+              value={useDevice ? "__device__" : from.name}
+              onChange={(e) => {
+                if (e.target.value === "__device__") {
+                  setUseDevice(true);
+                  position.ask();
+                } else {
+                  setUseDevice(false);
+                  setFrom(PLACES.find((p) => p.name === e.target.value) ?? from);
                 }
-                className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
-              >
-                {PLACES.map((p) => (
-                  <option key={p.name}>{p.name}</option>
-                ))}
-              </select>
-            </label>
-          </section>
-        )}
+              }}
+              className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
+            >
+              {PLACES.map((p) => (
+                <option key={p.name}>{p.name}</option>
+              ))}
+              <option value="__device__">Where I am now</option>
+            </select>
+          </label>
+
+          {useDevice && (
+            <p className="flex items-center gap-2 text-sm text-muted">
+              <Crosshair size={16} aria-hidden />
+              {position.status === "denied"
+                ? "Location is blocked. Allow it in your browser settings, or pick a starting point above."
+                : position.point
+                  ? `Found you, to within ${Math.round(position.accuracy ?? 0)} m.`
+                  : "Finding you…"}
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {VEHICLES.map(({ id, label }) => {
+              const Icon = ICON[id];
+              const on = vehicle === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setVehicle(id)}
+                  aria-pressed={on}
+                  className={`inline-flex min-h-11 items-center gap-2 rounded-[6px] px-3 text-base ${
+                    on
+                      ? "bg-foreground text-inverse"
+                      : "bg-surface text-foreground hover:bg-surface-hover"
+                  }`}
+                >
+                  <Icon size={18} aria-hidden />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="block">
+            <span className="text-sm text-muted">Going to</span>
+            <select
+              value={destination.name}
+              onChange={(e) =>
+                setDestination(PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION)
+              }
+              className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
+            >
+              {PLACES.map((p) => (
+                <option key={p.name}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        </section>
 
         {state === "error" && (
           <section className="rounded-[6px] bg-surface p-4">
