@@ -3,11 +3,12 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
-import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+  // Vite resolves tsconfig paths natively; the plugin warns that it is
+  // redundant.
+  resolve: { tsconfigPaths: true },
   plugins: [
-    tsConfigPaths(),
     tailwindcss(),
     tanstackStart({
       // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).

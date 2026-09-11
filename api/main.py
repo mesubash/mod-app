@@ -48,9 +48,24 @@ app = FastAPI(title="MOD routing", version="0.1.0", lifespan=lifespan)
 
 # The frontend dev server runs on its own origin, and TanStack Start's router
 # answers every path before any Vite or nitro proxy sees it, so the browser
-# calls this API directly and needs permission to. In production nginx serves
-# both from one origin, which is why the default list is empty there.
-CORS_ORIGINS = [o for o in os.environ.get("MOD_CORS_ORIGINS", "").split(",") if o]
+# calls this API directly and needs permission to.
+#
+# Localhost is allowed by default. A browser only sends these origins if the
+# page is served from the viewer's own machine, so this is not a way in from
+# the internet, and requiring an environment variable for the ordinary case
+# meant every first run failed with an opaque CORS error. Anything that
+# changes what travellers are told is behind the operator token regardless.
+# In production nginx serves both halves from one origin and MOD_CORS_ORIGINS
+# can be set to that origin, or to an empty string to allow none.
+DEV_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+]
+_configured = os.environ.get("MOD_CORS_ORIGINS")
+CORS_ORIGINS = (
+    [o for o in _configured.split(",") if o] if _configured is not None else DEV_ORIGINS
+)
 if CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,

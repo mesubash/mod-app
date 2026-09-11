@@ -86,9 +86,11 @@ def test_coordinates_are_validated(client):
     assert r.status_code == 422
 
 
-def test_no_cross_origin_access_unless_configured():
-    # Production serves both halves from one origin, so nothing should be
-    # allowed by default. MOD_CORS_ORIGINS opens it for the dev server only.
+def test_localhost_is_allowed_by_default_and_nothing_else():
+    # Convenience for the dev server, not a hole: a browser only sends these
+    # origins from a page on the viewer's own machine.
     from api.main import CORS_ORIGINS
 
-    assert CORS_ORIGINS == []
+    assert CORS_ORIGINS
+    assert all("localhost" in o or "127.0.0.1" in o for o in CORS_ORIGINS)
+
