@@ -20,7 +20,10 @@ decides. Compliance is a thing to measure, never to assume.
 
 **Different travellers get different advice.** When one event displaces many
 people, sending them all down the same next-best road just moves the jam.
-Spreading them is the point, and it is what the research measured.
+Spreading them across more than one alternative is the point -- but that
+specific mechanism is a design choice built on top of the study, not
+something the study itself validated. See "What the research supports"
+below for exactly what was and wasn't measured.
 
 ## What it is not
 
@@ -54,9 +57,12 @@ measured as counterproductive.
 ### Do not promise a percentage
 
 −42.6% is a modelled figure, at a modelled loading, in a model that **forced**
-compliance. A real app advises. The product may say that spreading traffic
-across alternatives helps the network as well as the driver, and may cite the
-study. It may not promise a congestion reduction to any user or authority.
+compliance. A real app advises. The product may say that diverting some
+share of travellers onto an alternative route helps the network as well as
+the driver, and may cite the study for that. It may not promise a congestion
+reduction to any user or authority, and it may not cite this figure as
+evidence that spreading across *multiple* alternatives specifically helps --
+that mechanism was tested separately and the result is retracted (see below).
 
 ### Do not re-advise continuously
 
@@ -89,15 +95,40 @@ router. There is a test for this and it must stay.
 
 - **Alternatives exist.** Essentially every corridor origin–destination pair
   has at least one alternative when the primary path is excluded.
-- **Spreading helps the network, not only the driver.** −14.4 ± 3.1% network
-  delay at a 5% diverted share, −25.7 ± 3.1% at 10%, −42.6 ± 2.5% at 20%, with
-  cordon throughput rising across the same range.
+- **Diverting a share of travellers onto an alternative helps the network,
+  not only the driver.** −14.4 ± 3.1% network delay at a 5% diverted share,
+  −25.7 ± 3.1% at 10%, −42.6 ± 2.5% at 20%, with cordon throughput rising
+  across the same range. This is ICICSET 2026 (accepted), under **recurring
+  peak congestion, no closure**, and every diverted traveller on a given
+  origin-destination pair gets sent to the **same single** alternative
+  (`experiments/transforms.py::reroute()` in the research repo) -- it is not
+  evidence about spreading travellers across *multiple* different
+  alternatives.
 - **A driver without local knowledge gains from being told.** This needs no
   simulation: the alternative exists, and a driver who does not know it cannot
   use it.
 - **Non-recurring disruption is the regime where a fixed mental map fails
   hardest** — and where a trip already underway can be rerouted but cannot be
   retimed or mode-shifted.
+
+## What the research does not support (yet)
+
+- **Spreading travellers across k>1 alternatives under a closure**, rather
+  than sending every diverted traveller to the same one, has its own
+  mechanism in the research repo (`spread_reroute()`, round-robin over the k
+  alternatives) and its own experiment grid (S4). That grid's result is
+  retracted by the paper's own limitations section: the closure was never
+  enforced in SUMO for the first run, the rerouter placement was broken in
+  the fix's first attempt (a vehicle can't be diverted by a rerouter placed
+  on the edge it's already too late to avoid), and the corrected version has
+  not been re-run. There is currently no valid result showing k>1 beats k=1
+  under a closure.
+- Because of that, MOD's k-distinct-alternatives assignment (`api/routing.py`,
+  and whatever policy picks which alternative a given traveller gets) is an
+  **engineering design choice**, not a simulated result. It may be described
+  as such -- a reasonable default pending better evidence -- but not cited to
+  the study, and not described as something the research "measured" or
+  "validated."
 
 ## What is unmeasured, and must be treated as open
 
