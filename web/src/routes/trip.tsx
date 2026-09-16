@@ -7,6 +7,7 @@ import { usePosition } from "@/hooks/use-position";
 import { useProbes } from "@/hooks/use-probes";
 import { fetchRoutes, kilometres, minutes, type RouteOption, type Vehicle } from "@/lib/api";
 import { routeProgress } from "@/lib/route-progress";
+import { addRecentTrip } from "@/lib/recent-trips";
 import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
 
 export const Route = createFileRoute("/trip")({
@@ -190,7 +191,16 @@ function Trip() {
           <button
             type="button"
             disabled={!route}
-            onClick={() => setRunning(true)}
+            onClick={() => {
+              // Recorded on start, not on selection: choosing a place in a
+              // dropdown is not evidence anyone actually went there.
+              addRecentTrip({
+                from: useDevice ? "__device__" : from.name,
+                to: destination.name,
+                vehicle,
+              });
+              setRunning(true);
+            }}
             className="disabled:opacity-40 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
           >
             <Crosshair size={20} aria-hidden /> Start trip to {destination.name}

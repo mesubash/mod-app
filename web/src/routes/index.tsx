@@ -25,6 +25,7 @@ import {
   type Vehicle,
 } from "@/lib/api";
 import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
+import { getRecentTrips, type RecentTrip } from "@/lib/recent-trips";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -56,6 +57,7 @@ function Home() {
   const [selected, setSelected] = useState(0);
   const [retry, setRetry] = useState(0);
   const [closures, setClosures] = useState<Closure[]>([]);
+  const [recent, setRecent] = useState<RecentTrip[]>([]);
 
   // What is shut is the reason this product exists, so it loads whether or not
   // the traveller has shared a position yet.
@@ -64,6 +66,28 @@ function Home() {
       .then(setClosures)
       .catch(() => setClosures([]));
   }, []);
+
+  // Read after mount, not from a useState initializer. This route is
+  // server-rendered, the server has no localStorage, and reading it during
+  // the render that gets sent to the client produces a real tree on the
+  // client that does not match what the server sent -- React discards it and
+  // re-renders the whole page client-side. Starting from [] on both sides
+  // and filling it in afterwards keeps the two renders identical.
+  useEffect(() => {
+    setRecent(getRecentTrips());
+  }, []);
+
+  function applyRecent(trip: RecentTrip) {
+    if (trip.from === "__device__") {
+      setUseDevice(true);
+      position.ask();
+    } else {
+      setUseDevice(false);
+      setFrom(PLACES.find((p) => p.name === trip.from) ?? from);
+    }
+    setDestination(PLACES.find((p) => p.name === trip.to) ?? destination);
+    setVehicle(trip.vehicle);
+  }
 
   const origin: Point | null = useDevice ? position.point : from.point;
 
@@ -118,6 +142,31 @@ function Home() {
                 </p>
               </div>
             ))}
+          </section>
+        )}
+
+        {recent.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-sm text-muted">Recent</h2>
+            {recent.map((trip, i) => {
+              const Icon = ICON[trip.vehicle];
+              return (
+                <button
+                  type="button"
+                  key={i}
+                  onClick={() => applyRecent(trip)}
+                  className="alternative-route"
+                >
+                  <span>
+                    {trip.from === "__device__" ? "Current location" : trip.from}
+                    <small>to {trip.to}</small>
+                  </span>
+                  <strong className="flex items-center gap-1.5 font-normal text-muted">
+                    <Icon size={16} aria-hidden />
+                  </strong>
+                </button>
+              );
+            })}
           </section>
         )}
 
