@@ -49,6 +49,7 @@ web/.nitro/
 # agent directly.
 AI-GUARDRAILS.md
 UI-PROMPT.md
+UI-PROMPT-MOBILE.md
 
 # --- Local only -----------------------------------------------------------
 .idea/
