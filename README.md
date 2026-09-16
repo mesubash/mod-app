@@ -123,16 +123,32 @@ result with `configured: false` and nothing else changes -- the app keeps
 using its fixed corridor place list exactly as it does today. Baato's routing
 is not proxied anywhere and should not be: MOD's own router is the product.
 
-Home, Trip, Report and After-trip are wired to the real API. The operator
-console's post-a-disruption and reported-conditions screens are too; its live
-view is not yet and still reads fixed sample data from
-`web/src/lib/mod-data.ts`.
+Home, Trip, Report and After-trip are wired to the real API, including
+Baato-backed place search once `BAATO_API_KEY` is set, continuous re-advice
+while a trip runs, and geometry-only turn cues. All three operator screens
+are wired too, including a live view of real closures and how affected
+travellers' alternatives have actually split.
 
 ## Status
 
-**Phase 1 of six is done** — the router runs as a service. See
-[`docs/phases.md`](docs/phases.md) for what the rest are and why they are in
-that order.
+Phase 1 (router as a service) and Phase 2 (closures, operator console,
+traveller app) are done. Phase 3 (probe collection) is built but hasn't yet
+answered the question it exists to produce -- how many active travellers the
+corridor needs before edge speeds are usable. Phase 4 (live weights) is not
+built; routing is still free-flow only.
+
+Phase 5 (continuous re-advice) and Phase 6 (spreading) have real, tested
+pieces built ahead of Phase 4, which is out of the order `docs/phases.md`
+itself sets and says not to do. That happened on explicit direction to build
+all of these at once; it wasn't a quiet drift. Two things worth revisiting
+before calling either phase actually done: Phase 5 has no formal session
+state, the re-advice logic in `web/src/routes/trip.tsx` runs on ordinary
+component state rather than the persisted session `docs/phases.md` describes;
+and neither Phase 5 nor 6 has been exercised against Phase 4's live weights,
+since those don't exist yet.
+
+See [`docs/phases.md`](docs/phases.md) for what each phase means and what
+"done" requires.
 
 Measured on the corridor graph: 4.7 ms for one route, 14.7 ms for three
 alternatives, 22 ms end to end over HTTP. About 54 MB resident.
