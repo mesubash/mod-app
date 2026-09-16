@@ -65,6 +65,9 @@ DEV_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
+    # Expo's web target (mod-traveller), default dev port.
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
 ]
 _configured = os.environ.get("MOD_CORS_ORIGINS")
 CORS_ORIGINS = (
