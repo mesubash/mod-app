@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Screen, Meta, TextLink, BackLink } from "@/components/mod/ui";
-import { reAdvice } from "@/lib/mod-data";
+
+import { Screen, Meta, PrimaryButton, TextLink, BackLink } from "@/components/mod/ui";
 
 export const Route = createFileRoute("/re-advice")({
   head: () => ({
@@ -9,25 +9,24 @@ export const Route = createFileRoute("/re-advice")({
       { title: "A better route just opened — MOD" },
       {
         name: "description",
-        content:
-          "Flooding at Thapathali. Switch via Maitighar, about 8 minutes faster, or stay on your current route.",
-      },
-      { property: "og:title", content: "A better route just opened — MOD" },
-      {
-        property: "og:description",
-        content:
-          "Flooding at Thapathali. Switch via Maitighar, about 8 minutes faster, or stay on your current route.",
+        content: "A condition changed on your route. Switch, or stay on what you have.",
       },
     ],
   }),
   component: ReAdvice,
 });
 
+// Illustrative only -- there is no live trigger yet. A real prompt needs a
+// running trip session that watches conditions on the road ahead and decides
+// when to interrupt, which is not built (Phase 5). This screen exists so the
+// interaction itself -- two equal-weight choices, no default -- is designed
+// before that system exists to drive it.
+const seenAt = "08:41";
+const what = "Flooding at Thapathali.";
+const advice = "Via Maitighar, about 8 minutes faster than staying on.";
+
 function ReAdvice() {
   const [decision, setDecision] = useState<"switch" | "stay" | null>(null);
-
-  const button =
-    "min-h-[2.75rem] w-full rounded-md bg-foreground px-5 py-3 text-base font-medium text-inverse hover:bg-foreground/90 sm:w-auto sm:min-w-[12rem]";
 
   return (
     <Screen>
@@ -35,9 +34,9 @@ function ReAdvice() {
         <BackLink to="/trip">Back to trip</BackLink>
 
         <div className="space-y-6">
-          <Meta>{reAdvice.seenAt}</Meta>
-          <p className="text-xl break-words sm:text-2xl">{reAdvice.what}</p>
-          <p className="text-2xl font-semibold break-words sm:text-3xl">{reAdvice.advice}</p>
+          <Meta>{seenAt}</Meta>
+          <p className="text-xl break-words sm:text-2xl">{what}</p>
+          <p className="text-2xl font-semibold break-words sm:text-3xl">{advice}</p>
           <Meta>
             Your current route still gets you there. This is the only change we will offer for the
             next few minutes.
@@ -46,12 +45,8 @@ function ReAdvice() {
 
         {decision === null ? (
           <div className="flex flex-col gap-3 pt-6 sm:flex-row">
-            <button type="button" className={button} onClick={() => setDecision("switch")}>
-              Switch
-            </button>
-            <button type="button" className={button} onClick={() => setDecision("stay")}>
-              Stay on this route
-            </button>
+            <PrimaryButton onClick={() => setDecision("switch")}>Switch</PrimaryButton>
+            <PrimaryButton onClick={() => setDecision("stay")}>Stay on this route</PrimaryButton>
           </div>
         ) : (
           <div className="space-y-4 pt-6">
