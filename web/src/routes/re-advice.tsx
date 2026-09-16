@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { Screen, Meta, PrimaryButton, TextLink, BackLink } from "@/components/mod/ui";
+import { ReAdvicePrompt } from "@/components/mod/re-advice-prompt";
+import { Screen, Meta, TextLink, BackLink } from "@/components/mod/ui";
 
 export const Route = createFileRoute("/re-advice")({
   head: () => ({
@@ -33,21 +34,15 @@ function ReAdvice() {
       <div className="space-y-10">
         <BackLink to="/trip">Back to trip</BackLink>
 
-        <div className="space-y-6">
-          <Meta>{seenAt}</Meta>
-          <p className="text-xl break-words sm:text-2xl">{what}</p>
-          <p className="text-2xl font-semibold break-words sm:text-3xl">{advice}</p>
-          <Meta>
-            Your current route still gets you there. This is the only change we will offer for the
-            next few minutes.
-          </Meta>
-        </div>
+        <Meta>{seenAt}</Meta>
 
         {decision === null ? (
-          <div className="flex flex-col gap-3 pt-6 sm:flex-row">
-            <PrimaryButton onClick={() => setDecision("switch")}>Switch</PrimaryButton>
-            <PrimaryButton onClick={() => setDecision("stay")}>Stay on this route</PrimaryButton>
-          </div>
+          <ReAdvicePrompt
+            what={what}
+            advice={advice}
+            onSwitch={() => setDecision("switch")}
+            onStay={() => setDecision("stay")}
+          />
         ) : (
           <div className="space-y-4 pt-6">
             <p className="text-confirm">

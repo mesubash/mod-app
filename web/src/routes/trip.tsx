@@ -1,14 +1,27 @@
 import { createFileRoute, Link, type SearchSchemaInput } from "@tanstack/react-router";
 import { CircleAlert, Crosshair, Square } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MapScreen, type MapRoute } from "@/components/mod/route-map";
+import { ReAdvicePrompt } from "@/components/mod/re-advice-prompt";
 import { usePosition } from "@/hooks/use-position";
 import { useProbes } from "@/hooks/use-probes";
-import { fetchRoutes, kilometres, minutes, type RouteOption, type Vehicle } from "@/lib/api";
+import {
+  fetchRoutes,
+  getClosures,
+  kilometres,
+  minutes,
+  type RouteOption,
+  type Vehicle,
+} from "@/lib/api";
 import { routeProgress } from "@/lib/route-progress";
+import { shouldSuggestAlternative } from "@/lib/re-advice-trigger";
 import { addRecentTrip } from "@/lib/recent-trips";
 import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
+
+const ALT_CHECK_INTERVAL_MS = 30_000;
+// Matches the copy: "we will not ask again for a few minutes."
+const ALT_DISMISS_COOLDOWN_MS = 5 * 60_000;
 
 export const Route = createFileRoute("/trip")({
   head: () => ({
@@ -88,6 +101,55 @@ function Trip() {
   useEffect(() => {
     if (running && position.point) recordProbe(position.point);
   }, [running, position.point, recordProbe]);
+
+  // Polled on a ref, not a `position.point` dependency: GPS updates every
+  // few seconds while position.point is itself in the deps array would clear
+  // and restart this interval before it ever reached 30s, so the check would
+  // never actually fire.
+  const livePosition = useRef(position.point);
+  useEffect(() => {
+    livePosition.current = position.point;
+  }, [position.point]);
+
+  const [alt, setAlt] = useState<{
+    route: RouteOption;
+    savedSeconds: number;
+    blocked: boolean;
+  } | null>(null);
+  const dismissedUntil = useRef(0);
+
+  useEffect(() => {
+    if (!running || !route || alt) return;
+    const timer = setInterval(() => {
+      const here = livePosition.current;
+      if (!here || Date.now() < dismissedUntil.current) return;
+      Promise.all([fetchRoutes(here, destination.point, vehicle), getClosures()])
+        .then(([r, closures]) => {
+          const candidate = r.routes[0];
+          if (!candidate) return;
+          const verdict = shouldSuggestAlternative({
+            currentRoute: route,
+            doneFraction: routeProgress(route, here).done,
+            candidateSeconds: candidate.seconds,
+            shutEdges: new Set(closures.flatMap((c) => c.edges)),
+          });
+          if (verdict) setAlt({ route: candidate, ...verdict });
+        })
+        .catch(() => {});
+    }, ALT_CHECK_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [running, route, destination, vehicle, alt]);
+
+  function acceptAlt() {
+    if (!alt) return;
+    setRoute(alt.route);
+    setAlt(null);
+  }
+
+  function dismissAlt() {
+    dismissedUntil.current = Date.now() + ALT_DISMISS_COOLDOWN_MS;
+    setAlt(null);
+  }
 
   const mapRoutes: MapRoute[] = useMemo(
     () => (route ? [{ geometry: route.geometry, tone: "assigned" }] : []),
@@ -237,6 +299,26 @@ function Trip() {
             <h2 className="text-lg font-medium">No route from here</h2>
             <p className="mt-1 text-base text-muted">You may be outside the corridor MOD covers.</p>
           </section>
+        )}
+
+        {alt && (
+          <ReAdvicePrompt
+            what={
+              alt.blocked
+                ? "A road on your route is closed ahead."
+                : "A condition changed on the road ahead."
+            }
+            advice={
+              alt.savedSeconds > 0
+                ? `A different route from here saves about ${minutes(alt.savedSeconds)}.`
+                : "A different route from here avoids it."
+            }
+            {...(alt.blocked
+              ? { note: "Staying means continuing toward a road that is currently shut." }
+              : {})}
+            onSwitch={acceptAlt}
+            onStay={dismissAlt}
+          />
         )}
 
         {state && route && (
