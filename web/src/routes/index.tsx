@@ -1,9 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bike, Bus, Car, Crosshair, TriangleAlert, Truck } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ArrowDownUp,
+  ArrowRight,
+  Bike,
+  Bus,
+  Car,
+  Crosshair,
+  TriangleAlert,
+  Truck,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-import { RouteMap, type MapRoute } from "@/components/mod/route-map";
-import { Screen } from "@/components/mod/ui";
+import { MapScreen, type MapRoute } from "@/components/mod/route-map";
 import { usePosition } from "@/hooks/use-position";
 import {
   fetchRoutes,
@@ -45,6 +53,8 @@ function Home() {
   const [useDevice, setUseDevice] = useState(false);
   const [result, setResult] = useState<RouteResponse | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [selected, setSelected] = useState(0);
+  const [retry, setRetry] = useState(0);
   const [closures, setClosures] = useState<Closure[]>([]);
 
   // What is shut is the reason this product exists, so it loads whether or not
@@ -58,7 +68,12 @@ function Home() {
   const origin: Point | null = useDevice ? position.point : from.point;
 
   useEffect(() => {
-    if (!origin) return;
+    setResult(null);
+    setSelected(0);
+    if (!origin) {
+      setState("idle");
+      return;
+    }
     let cancelled = false;
     setState("loading");
     fetchRoutes(origin, destination.point, vehicle)
@@ -71,23 +86,23 @@ function Home() {
     return () => {
       cancelled = true;
     };
-  }, [origin, destination, vehicle]);
+  }, [origin, destination, vehicle, retry]);
 
-  const best = result?.routes[0];
-  const mapRoutes: MapRoute[] =
-    result?.routes.map((r, i) => ({
-      geometry: r.geometry,
-      tone: i === 0 ? ("assigned" as const) : ("other" as const),
-    })) ?? [];
+  const best = result?.routes[selected];
+  const mapRoutes: MapRoute[] = useMemo(
+    () =>
+      result?.routes.map((r, i) => ({
+        geometry: r.geometry,
+        tone: i === selected ? ("assigned" as const) : ("other" as const),
+      })) ?? [],
+    [result, selected],
+  );
 
   return (
-    <Screen>
-      <div className="space-y-5">
-        <header className="flex items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight sm:hidden">
-            MOD <span className="font-deva text-muted">मोड</span>
-          </h1>
-          <p className="text-base text-muted sm:text-lg">Where are you going?</p>
+    <MapScreen position={position} routes={mapRoutes} label={`Routes to ${destination.name}`}>
+      <div className="space-y-4">
+        <header className="planner-heading">
+          <h1>Where are you going?</h1>
         </header>
 
         {closures.length > 0 && (
@@ -99,17 +114,18 @@ function Home() {
                   {c.reason}
                 </h2>
                 <p className="mt-1 text-base text-muted">
-                  {c.kind} · clears in {until(c.ends)}. Your route below already avoids it.
+                  {c.kind} · clears in {until(c.ends)}. Routes account for active closures.
                 </p>
               </div>
             ))}
           </section>
         )}
 
-        <section className="space-y-3">
+        <section className="route-fields">
           <label className="block">
             <span className="text-sm text-muted">Starting from</span>
             <select
+              aria-label="Starting from"
               value={useDevice ? "__device__" : from.name}
               onChange={(e) => {
                 if (e.target.value === "__device__") {
@@ -134,38 +150,18 @@ function Home() {
               <Crosshair size={16} aria-hidden />
               {position.status === "denied"
                 ? "Location is blocked. Allow it in your browser settings, or pick a starting point above."
-                : position.point
-                  ? `Found you, to within ${Math.round(position.accuracy ?? 0)} m.`
-                  : "Finding you…"}
+                : position.status === "unavailable"
+                  ? "Location unavailable. Pick a starting point above."
+                  : position.point
+                    ? `Found you, to within ${Math.round(position.accuracy ?? 0)} m.`
+                    : "Finding you…"}
             </p>
           )}
-
-          <div className="flex flex-wrap gap-2">
-            {VEHICLES.map(({ id, label }) => {
-              const Icon = ICON[id];
-              const on = vehicle === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setVehicle(id)}
-                  aria-pressed={on}
-                  className={`inline-flex min-h-11 items-center gap-2 rounded-[6px] px-3 text-base ${
-                    on
-                      ? "bg-foreground text-inverse"
-                      : "bg-surface text-foreground hover:bg-surface-hover"
-                  }`}
-                >
-                  <Icon size={18} aria-hidden />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
 
           <label className="block">
             <span className="text-sm text-muted">Going to</span>
             <select
+              aria-label="Going to"
               value={destination.name}
               onChange={(e) =>
                 setDestination(PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION)
@@ -177,58 +173,124 @@ function Home() {
               ))}
             </select>
           </label>
+          <button
+            type="button"
+            className="swap-places"
+            aria-label="Swap starting point and destination"
+            disabled={useDevice}
+            onClick={() => {
+              setFrom(destination);
+              setDestination(from);
+            }}
+          >
+            <ArrowDownUp size={18} />
+          </button>
         </section>
+        <div className="vehicle-options">
+          {VEHICLES.map(({ id, label }) => {
+            const Icon = ICON[id];
+            const on = vehicle === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setVehicle(id)}
+                aria-pressed={on}
+                className={`inline-flex min-h-11 items-center gap-2 rounded-[6px] px-3 text-base ${
+                  on
+                    ? "bg-foreground text-inverse"
+                    : "bg-surface text-foreground hover:bg-surface-hover"
+                }`}
+              >
+                <Icon size={18} aria-hidden />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {best && (
+          <button
+            className="mobile-route-button"
+            onClick={(e) =>
+              e.currentTarget
+                .closest(".map-panel")
+                ?.querySelector(".route-summary")
+                ?.scrollIntoView({ block: "start" })
+            }
+          >
+            View routes · {minutes(best.seconds)} <ArrowRight size={16} aria-hidden />
+          </button>
+        )}
 
         {state === "error" && (
           <section className="rounded-[6px] bg-surface p-4">
             <h2 className="text-lg font-medium">The route service did not answer</h2>
-            <p className="mt-1 text-base text-muted">
-              Nothing is wrong with your trip. Try again in a moment.
-            </p>
+            <p className="mt-1 text-base text-muted">Check your connection and try again.</p>
+            <button className="retry-button" onClick={() => setRetry((n) => n + 1)}>
+              Try again
+            </button>
           </section>
         )}
 
         {origin && state === "loading" && !result && (
-          <div className="h-[220px] w-full rounded-[6px] bg-surface" />
+          <p className="text-sm text-muted" role="status">
+            Finding routes…
+          </p>
         )}
 
         {best && (
           <>
-            <RouteMap routes={mapRoutes} label={`Route to ${destination.name}`} />
-
-            <section className="rounded-[6px] bg-surface p-4">
+            <section className="route-summary">
+              <button
+                className="mobile-edit-button"
+                onClick={(e) => e.currentTarget.closest(".map-panel")?.scrollTo({ top: 0 })}
+              >
+                Edit journey
+              </button>
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="text-lg font-medium">To {destination.name}</h2>
                 <span className="text-lg font-semibold">{minutes(best.seconds)}</span>
               </div>
               <p className="mt-1 text-base text-muted">
-                {kilometres(best.metres)} · free-flow estimate, not live traffic
+                {kilometres(best.metres)} · Free-flow estimate
               </p>
               <button
                 type="button"
-                onClick={() => navigate({ to: "/trip" })}
+                onClick={() =>
+                  navigate({
+                    to: "/trip",
+                    search: {
+                      from: useDevice ? "__device__" : from.name,
+                      to: destination.name,
+                      vehicle,
+                      option: selected,
+                    },
+                  })
+                }
                 className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
               >
-                Start trip
+                Start trip <ArrowRight size={18} className="ml-2" aria-hidden />
               </button>
             </section>
 
             {result.routes.length > 1 && (
               <section className="space-y-2">
-                <h2 className="text-base font-medium">
-                  {result.routes.length - 1} other way
-                  {result.routes.length > 2 ? "s" : ""}
-                </h2>
-                {result.routes.slice(1).map((r, i) => (
-                  <div
+                <h2 className="text-base font-medium">Route options</h2>
+                {result.routes.map((r, i) => (
+                  <button
+                    type="button"
                     key={i}
-                    className="flex items-baseline justify-between rounded-[6px] bg-surface p-3"
+                    onClick={() => setSelected(i)}
+                    aria-pressed={selected === i}
+                    className="alternative-route"
                   >
-                    <span className="text-base text-muted">Alternative {i + 1}</span>
-                    <span className="text-base">
-                      {minutes(r.seconds)} · {kilometres(r.metres)}
+                    <span>
+                      {i === 0 ? "Suggested route" : `Alternative ${i}`}
+                      <small>{kilometres(r.metres)}</small>
                     </span>
-                  </div>
+                    <strong>{minutes(r.seconds)}</strong>
+                  </button>
                 ))}
               </section>
             )}
@@ -243,7 +305,8 @@ function Home() {
             </p>
           </section>
         )}
+        <p className="planner-footnote">Estimates are not live traffic.</p>
       </div>
-    </Screen>
+    </MapScreen>
   );
 }

@@ -1,19 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, type SearchSchemaInput } from "@tanstack/react-router";
 import { CircleAlert, Crosshair, Square } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { RouteMap, type MapRoute } from "@/components/mod/route-map";
-import { Screen } from "@/components/mod/ui";
+import { MapScreen, type MapRoute } from "@/components/mod/route-map";
 import { usePosition } from "@/hooks/use-position";
-import {
-  distance,
-  fetchRoutes,
-  kilometres,
-  minutes,
-  type Point,
-  type RouteOption,
-  type Vehicle,
-} from "@/lib/api";
+import { fetchRoutes, kilometres, minutes, type RouteOption, type Vehicle } from "@/lib/api";
+import { routeProgress } from "@/lib/route-progress";
 import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
 
 export const Route = createFileRoute("/trip")({
@@ -26,58 +18,79 @@ export const Route = createFileRoute("/trip")({
       },
     ],
   }),
+  validateSearch: (search: Record<string, unknown> & SearchSchemaInput) => ({
+    from:
+      search["from"] === "__device__"
+        ? "__device__"
+        : (PLACES.find((p) => p.name === search["from"])?.name ?? PLACES[2]!.name),
+    to: PLACES.find((p) => p.name === search["to"])?.name ?? DEFAULT_DESTINATION.name,
+    vehicle: VEHICLES.find((v) => v.id === search["vehicle"])?.id ?? "motorcycle",
+    option:
+      Number.isInteger(Number(search["option"])) && Number(search["option"]) >= 0
+        ? Number(search["option"])
+        : 0,
+  }),
   component: Trip,
 });
 
-/** How far along the route the traveller is, by nearest point on the line. */
-function progress(route: RouteOption, here: Point) {
-  let nearest = 0;
-  let best = Infinity;
-  for (const [i, pair] of route.geometry.entries()) {
-    const d = distance(here, { lon: pair[0], lat: pair[1] });
-    if (d < best) {
-      best = d;
-      nearest = i;
-    }
-  }
-  return {
-    done: nearest / Math.max(route.geometry.length - 1, 1),
-    offRouteBy: best,
-  };
-}
-
 function Trip() {
+  const search = Route.useSearch();
   const [running, setRunning] = useState(false);
   const position = usePosition(running);
-  const [vehicle, setVehicle] = useState<Vehicle>("motorcycle");
-  const [destination, setDestination] = useState(DEFAULT_DESTINATION);
+  const [vehicle, setVehicle] = useState<Vehicle>(search.vehicle);
+  const [destination, setDestination] = useState(
+    PLACES.find((p) => p.name === search.to) ?? DEFAULT_DESTINATION,
+  );
   // Same reason as the home screen: a start point can be chosen, so the app
   // works from outside Kathmandu. Real position still drives progress once
   // the trip is running.
-  const [from, setFrom] = useState(PLACES[2]!);
-  const [useDevice, setUseDevice] = useState(false);
+  const [from, setFrom] = useState(PLACES.find((p) => p.name === search.from) ?? PLACES[2]!);
+  const [useDevice, setUseDevice] = useState(search.from === "__device__");
   const [route, setRoute] = useState<RouteOption | null>(null);
+  const [retry, setRetry] = useState(0);
   const [failed, setFailed] = useState(false);
 
-  const here = useDevice ? position.point : (position.point ?? from.point);
+  const origin = useDevice ? position.point : from.point;
 
-  // Route once, when the trip starts. Re-routing on every position update is
-  // what makes an app flip-flop; re-advice belongs behind a threshold, and
-  // that is Phase 5 rather than this.
   useEffect(() => {
-    if (!running || !here || route) return;
-    fetchRoutes(here, destination.point, vehicle)
-      .then((r) => (r.routes[0] ? setRoute(r.routes[0]) : setFailed(true)))
-      .catch(() => setFailed(true));
-  }, [running, here, route, destination, vehicle]);
+    if (running) return;
+    let cancelled = false;
+    setRoute(null);
+    setFailed(false);
+    if (!origin) return;
+    fetchRoutes(origin, destination.point, vehicle)
+      .then((r) => {
+        if (cancelled) return;
+        const next = r.routes[search.option] ?? r.routes[0];
+        if (next) setRoute(next);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [running, origin, destination, vehicle, search.option, retry]);
 
-  const state = useMemo(() => (route && here ? progress(route, here) : null), [route, here]);
+  const state = useMemo(
+    () => (route && position.point ? routeProgress(route, position.point) : null),
+    [route, position.point],
+  );
 
-  const mapRoutes: MapRoute[] = route ? [{ geometry: route.geometry, tone: "assigned" }] : [];
+  const mapRoutes: MapRoute[] = useMemo(
+    () => (route ? [{ geometry: route.geometry, tone: "assigned" }] : []),
+    [route],
+  );
 
   if (!running) {
     return (
-      <Screen>
+      <MapScreen
+        position={position}
+        completed={running && state && state.offRouteBy <= 120 ? state.done : 0}
+        routes={mapRoutes}
+        label={`Your route to ${destination.name}`}
+      >
         <div className="space-y-5">
           <h1 className="text-2xl font-semibold tracking-tight">Start a trip</h1>
           <p className="text-base text-muted">
@@ -85,7 +98,7 @@ function Trip() {
             changes. It stops watching the moment you end the trip.
           </p>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="vehicle-options">
             {VEHICLES.map(({ id, label }) => (
               <button
                 key={id}
@@ -106,10 +119,13 @@ function Trip() {
           <label className="block">
             <span className="text-sm text-muted">Starting from</span>
             <select
+              aria-label="Starting from"
               value={useDevice ? "__device__" : from.name}
               onChange={(e) => {
-                if (e.target.value === "__device__") setUseDevice(true);
-                else {
+                if (e.target.value === "__device__") {
+                  setUseDevice(true);
+                  position.ask();
+                } else {
                   setUseDevice(false);
                   setFrom(PLACES.find((p) => p.name === e.target.value) ?? from);
                 }
@@ -126,6 +142,7 @@ function Trip() {
           <label className="block">
             <span className="text-sm text-muted">Going to</span>
             <select
+              aria-label="Going to"
               value={destination.name}
               onChange={(e) =>
                 setDestination(PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION)
@@ -138,20 +155,48 @@ function Trip() {
             </select>
           </label>
 
+          {useDevice && !position.point && (
+            <p role="status" className="text-sm text-muted">
+              {position.error ?? "Choose your current location to find a route."}
+              <button className="retry-button" onClick={position.ask}>
+                Find my location
+              </button>
+            </p>
+          )}
+          {failed && (
+            <div role="alert">
+              No route available. Try another starting point or destination.
+              <button className="retry-button" onClick={() => setRetry((n) => n + 1)}>
+                Try again
+              </button>
+            </div>
+          )}
+          {!route && !failed && origin && <p role="status">Finding your route…</p>}
+          {route && (
+            <p className="text-muted">
+              {minutes(route.seconds)} · {kilometres(route.metres)} · Free-flow estimate
+            </p>
+          )}
           <button
             type="button"
+            disabled={!route}
             onClick={() => setRunning(true)}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
+            className="disabled:opacity-40 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
           >
             <Crosshair size={20} aria-hidden /> Start trip to {destination.name}
           </button>
         </div>
-      </Screen>
+      </MapScreen>
     );
   }
 
   return (
-    <Screen>
+    <MapScreen
+      position={position}
+      completed={running && state && state.offRouteBy <= 120 ? state.done : 0}
+      routes={mapRoutes}
+      label={`Your route to ${destination.name}`}
+    >
       <div className="space-y-4">
         <header className="flex items-baseline justify-between gap-3">
           <h1 className="text-xl font-semibold tracking-tight">To {destination.name}</h1>
@@ -173,10 +218,6 @@ function Trip() {
             <p className="mt-1 text-base text-muted">You may be outside the corridor MOD covers.</p>
           </section>
         )}
-
-        {!route && !failed && <div className="h-[260px] w-full rounded-[6px] bg-surface" />}
-
-        {route && <RouteMap routes={mapRoutes} height={260} label="Your route" />}
 
         {state && route && (
           <section className="rounded-[6px] bg-surface p-4">
@@ -225,6 +266,6 @@ function Trip() {
           </Link>
         </div>
       </div>
-    </Screen>
+    </MapScreen>
   );
 }

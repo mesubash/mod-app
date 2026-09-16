@@ -54,3 +54,6 @@ UI-PROMPT.md
 .idea/
 .vscode/
 *.local
+
+AGENTS.md
+CLAUDE.md

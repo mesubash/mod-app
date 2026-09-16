@@ -17,7 +17,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background sm:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] sm:hidden"
     >
       <ul className="mx-auto flex max-w-[45rem]">
         {ITEMS.map(({ to, label, icon: Icon }) => {
@@ -49,11 +49,9 @@ export function SideRail() {
   return (
     <nav
       aria-label="Main"
-      className="hidden sm:fixed sm:inset-y-0 sm:left-0 sm:z-20 sm:flex sm:w-56 sm:flex-col sm:gap-1 sm:border-r sm:border-border sm:bg-background sm:p-4"
+      className="hidden sm:fixed sm:inset-y-0 sm:left-0 sm:z-20 sm:flex sm:w-20 sm:flex-col sm:gap-1 sm:border-r sm:border-border sm:bg-background sm:p-2"
     >
-      <span className="mb-6 px-3 text-lg font-semibold tracking-tight">
-        MOD <span className="font-deva text-muted">मोड</span>
-      </span>
+      <span className="mb-6 pt-3 text-center text-lg font-semibold tracking-tight">MOD</span>
       {ITEMS.map(({ to, label, icon: Icon }) => {
         const active = to === "/" ? path === "/" : path.startsWith(to);
         return (
@@ -61,7 +59,7 @@ export function SideRail() {
             key={to}
             to={to}
             aria-current={active ? "page" : undefined}
-            className={`flex min-h-11 items-center gap-3 rounded-[6px] px-3 text-base ${
+            className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-[6px] px-1 text-xs ${
               active ? "bg-surface font-medium text-foreground" : "text-muted hover:bg-surface"
             }`}
           >
