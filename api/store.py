@@ -59,6 +59,19 @@ CREATE TABLE IF NOT EXISTS spread_counters (
     key     TEXT    PRIMARY KEY,
     counter INTEGER NOT NULL
 );
+
+-- One row per affected traveller actually rotated onto an alternative.
+-- Append-only so the operator console can show a real, decaying-by-window
+-- split instead of "trust us, it's round robin" -- see docs/phases.md,
+-- Phase 6: "Done when ... the operator console shows the split."
+CREATE TABLE IF NOT EXISTS spread_selections (
+    id        INTEGER PRIMARY KEY,
+    key       TEXT    NOT NULL,
+    alt_index INTEGER NOT NULL,
+    at        REAL    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS spread_selections_recent ON spread_selections (at);
 """
 
 
@@ -183,6 +196,33 @@ def next_spread_index(db, key: str, options: int) -> int:
     )
     db.commit()
     return counter % options
+
+
+def record_spread_selection(db, key: str, alt_index: int) -> None:
+    db.execute(
+        "INSERT INTO spread_selections (key, alt_index, at) VALUES (?, ?, ?)",
+        (key, alt_index, time.time()),
+    )
+    db.commit()
+
+
+def spread_split(db, within_minutes: int = 120) -> list[dict]:
+    """How affected travellers' leading alternative has actually split,
+    per origin/destination/vehicle, over the window. Real counts, not a
+    claim that round robin must be even -- an operator can see if it is."""
+    since = time.time() - within_minutes * 60
+    rows = db.execute(
+        "SELECT key, alt_index, COUNT(*) AS n FROM spread_selections"
+        " WHERE at >= ? GROUP BY key, alt_index ORDER BY key, alt_index",
+        (since,),
+    ).fetchall()
+    by_key: dict[str, dict[int, int]] = {}
+    for r in rows:
+        by_key.setdefault(r["key"], {})[r["alt_index"]] = r["n"]
+    return [
+        {"key": key, "counts": [counts.get(i, 0) for i in range(max(counts) + 1)]}
+        for key, counts in by_key.items()
+    ]
 
 
 def median_speeds(db, within_minutes: int = 15) -> dict[str, float]:

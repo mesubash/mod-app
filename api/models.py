@@ -101,6 +101,16 @@ class Coverage(BaseModel):
     usable: bool
 
 
+class SpreadSplit(BaseModel):
+    key: str
+    counts: list[int]
+
+
+class SpreadResponse(BaseModel):
+    window_minutes: int
+    splits: list[SpreadSplit]
+
+
 class PlaceResult(BaseModel):
     name: str
     lon: float

@@ -101,6 +101,11 @@ export const postProbes = (pings: Ping[]) =>
 
 export const getCoverage = () => json<Coverage>("/coverage");
 
+export type SpreadSplit = { key: string; counts: number[] };
+export type SpreadResponse = { window_minutes: number; splits: SpreadSplit[] };
+
+export const getSpread = () => json<SpreadResponse>("/spread");
+
 export type PlaceResult = { name: string; lon: number; lat: number };
 export type PlaceSearchResponse = { results: PlaceResult[]; configured: boolean };
 

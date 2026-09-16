@@ -21,6 +21,8 @@ from api.models import (
     Coverage,
     ProbeRequest,
     RouteResponse,
+    SpreadResponse,
+    SpreadSplit,
     TripAnswerRequest,
 )
 from api.routing import alternatives, shortest
@@ -119,8 +121,10 @@ def route(request: RouteRequest) -> RouteResponse:
         unconstrained = shortest(GRAPH, origin, destination, VEHICLES[request.vehicle])
         affected = unconstrained is not None and any(e in shut for e in unconstrained.edges)
         if affected:
-            i = store.next_spread_index(DB, f"{origin}:{destination}:{request.vehicle}", len(found))
+            key = f"{origin}:{destination}:{request.vehicle}"
+            i = store.next_spread_index(DB, key, len(found))
             found = found[i:] + found[:i]
+            store.record_spread_selection(DB, key, i)
 
     return RouteResponse(
         routes=[
@@ -268,4 +272,19 @@ def coverage(minutes: int = 15) -> Coverage:
         # Nothing routes on this yet. The threshold is a placeholder for a
         # decision Phase 4 has to make with real numbers in front of it.
         usable=False,
+    )
+
+
+@app.get("/spread")
+def spread(minutes: int = 120) -> SpreadResponse:
+    """How affected travellers' leading alternative has actually split.
+
+    Real counts over a decaying window, not a claim that round robin must be
+    even. Keys are origin/destination/vehicle node ids, not place names --
+    the graph has no reverse-geocoder, and the operator console's own closure
+    picker already shows raw edge ids for the same reason.
+    """
+    return SpreadResponse(
+        window_minutes=minutes,
+        splits=[SpreadSplit(**s) for s in store.spread_split(DB, minutes)],
     )

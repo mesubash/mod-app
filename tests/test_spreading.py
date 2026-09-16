@@ -85,6 +85,22 @@ def test_an_affected_travellers_suggestion_rotates_round_robin(client):
         assert shut_edge not in edges
 
 
+def test_the_operator_split_view_reflects_real_selections(client):
+    baseline = route(client)["routes"]
+    primary_edges = baseline[0]["edges"]
+    shut_edge = primary_edges[len(primary_edges) // 2]
+    close(client, shut_edge)
+
+    for _ in range(4):
+        route(client)
+
+    body = client.get("/spread").json()
+    matching = [s for s in body["splits"] if s["counts"] and sum(s["counts"]) >= 4]
+    assert matching, body
+    assert sum(matching[0]["counts"]) >= 4
+    assert len(matching[0]["counts"]) > 1
+
+
 def test_each_key_has_its_own_independent_counter(tmp_path):
     # Regression guard at the storage layer: the round-robin key must
     # include origin/destination/vehicle, or two unrelated trips would
