@@ -99,3 +99,18 @@ class Coverage(BaseModel):
     edges_total: int
     share_of_network: float
     usable: bool
+
+
+class PlaceResult(BaseModel):
+    name: str
+    lon: float
+    lat: float
+
+
+class PlaceSearchResponse(BaseModel):
+    results: list[PlaceResult]
+    # False whenever no Baato key is configured. The frontend uses this to
+    # decide what an empty list means: not configured falls back to filtering
+    # the fixed corridor list client-side, same as today; configured-but-empty
+    # is a real "no matches" and should be shown as one.
+    configured: bool

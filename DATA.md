@@ -48,3 +48,18 @@ Probe traces, GPS points tied to a traveller, trip sessions, or any other
 identifiable location data. These are excluded in `.gitignore`, and the
 exclusion is not the safeguard — aggregating before persisting is. See the
 privacy section of `docs/product.md`.
+
+## Place search (Baato)
+
+Place-name search, when a key is configured, is proxied from Baato's API
+(`api/places.py`, `GET /places/search`). Results are not stored — a query
+goes out, the response comes back, nothing about it persists. This
+repository holds no Baato data and redistributes none.
+
+The key itself is a credential, not project data: it belongs in
+`BAATO_API_KEY`, set in the deployment environment, never committed. See
+`docs/architecture.md` for how the fallback behaves with no key set.
+
+MOD's own router is not replaced by anything Baato provides. Its routing
+endpoint is not called from this codebase, on purpose — see the comment at
+the top of `api/places.py`.

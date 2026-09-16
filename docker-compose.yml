@@ -7,3 +7,10 @@ services:
     # The VPS runs other services that matter more and has about 3 GB free.
     # The API sits near 100 MB; this stops a leak here from starving them.
     mem_limit: 512m
+    # Compose reads a top-level .env for these automatically if one exists;
+    # ${VAR:-} defaults to empty so `docker compose up` works with none of
+    # them set at all, same as running the API directly with a bare shell.
+    environment:
+      MOD_CORS_ORIGINS: ${MOD_CORS_ORIGINS:-}
+      MOD_OPERATOR_TOKEN: ${MOD_OPERATOR_TOKEN:-}
+      BAATO_API_KEY: ${BAATO_API_KEY:-}

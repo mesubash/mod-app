@@ -5,12 +5,12 @@ description = "Route guidance for the Tripureshwor-Koteshwor corridor"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.121.0",
+    "httpx>=0.28.0",
     "uvicorn[standard]>=0.40.0",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.0",
     "pytest>=9.1.1",
 ]
 

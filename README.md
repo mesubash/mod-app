@@ -116,8 +116,17 @@ origin, or to an empty string to allow none.
 Posting closures needs `MOD_OPERATOR_TOKEN` set, and the same value entered in
 the operator console at `/operator`.
 
-Screens still read fixed sample data from `web/src/lib/mod-data.ts`. Wiring
-them to `/route` is the next step.
+Place search is proxied through Baato (`/places/search`) rather than called
+from the browser, per Baato's own guidance on keeping a key off the client.
+Set `BAATO_API_KEY` to turn it on. Unset, the endpoint returns an empty
+result with `configured: false` and nothing else changes -- the app keeps
+using its fixed corridor place list exactly as it does today. Baato's routing
+is not proxied anywhere and should not be: MOD's own router is the product.
+
+Home, Trip, Report and After-trip are wired to the real API. The operator
+console's post-a-disruption and reported-conditions screens are too; its live
+view is not yet and still reads fixed sample data from
+`web/src/lib/mod-data.ts`.
 
 ## Status
 

@@ -7,11 +7,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import graph as graph_module
+from api import places as places_module
 from api import probes, store
 from api.models import (
     VEHICLES,
     Closure,
     ClosureRequest,
+    PlaceSearchResponse,
     Report,
     ReportRequest,
     RouteOption,
@@ -219,6 +221,19 @@ def post_probes(request: ProbeRequest) -> dict[str, int]:
     )
     store.add_speeds(DB, observed)
     return {"matched": len(observed), "sent": len(request.pings)}
+
+
+@app.get("/places/search")
+async def search_places(q: str) -> PlaceSearchResponse:
+    """Place search, proxied through Baato.
+
+    Returns an empty list with configured=false when no key is set, which is
+    the state today -- the client falls back to its own fixed corridor list
+    exactly as it did before this endpoint existed. Nothing about the app's
+    current behaviour changes until a key is added.
+    """
+    results = await places_module.search(q)
+    return PlaceSearchResponse(results=results, configured=bool(places_module.BAATO_KEY))
 
 
 @app.get("/coverage")
