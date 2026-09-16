@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { MapScreen, type MapRoute } from "@/components/mod/route-map";
 import { usePosition } from "@/hooks/use-position";
+import { useProbes } from "@/hooks/use-probes";
 import { fetchRoutes, kilometres, minutes, type RouteOption, type Vehicle } from "@/lib/api";
 import { routeProgress } from "@/lib/route-progress";
 import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
@@ -77,6 +78,15 @@ function Trip() {
     () => (route && position.point ? routeProgress(route, position.point) : null),
     [route, position.point],
   );
+
+  // Feeds /coverage. A ping while the traveller is off the route is still
+  // real information about a real road, so it is recorded regardless of
+  // offRouteBy; the matcher on the server, not the client, decides what a
+  // position pair can say about an edge.
+  const { record: recordProbe } = useProbes(running);
+  useEffect(() => {
+    if (running && position.point) recordProbe(position.point);
+  }, [running, position.point, recordProbe]);
 
   const mapRoutes: MapRoute[] = useMemo(
     () => (route ? [{ geometry: route.geometry, tone: "assigned" }] : []),

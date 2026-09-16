@@ -68,6 +68,17 @@ export type Report = {
   created: number;
 };
 
+export type Ping = { lon: number; lat: number; at: number };
+
+export type Coverage = {
+  window_minutes: number;
+  observations: number;
+  edges_with_data: number;
+  edges_total: number;
+  share_of_network: number;
+  usable: boolean;
+};
+
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     headers: { "content-type": "application/json" },
@@ -78,6 +89,17 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const getClosures = () => json<Closure[]>("/closures");
+
+// One request per batch of pings, not one per ping: a request every few
+// seconds is what earns a routing app a reputation for eating battery and
+// mobile data, and that reputation does not come back.
+export const postProbes = (pings: Ping[]) =>
+  json<{ matched: number; sent: number }>("/probes", {
+    method: "POST",
+    body: JSON.stringify({ pings }),
+  });
+
+export const getCoverage = () => json<Coverage>("/coverage");
 
 export const getReports = () => json<Report[]>("/reports");
 
