@@ -1,5 +1,12 @@
 import { createFileRoute, Link, type SearchSchemaInput } from "@tanstack/react-router";
-import { CircleAlert, Crosshair, Square } from "lucide-react";
+import {
+  CircleAlert,
+  CornerUpLeft,
+  CornerUpRight,
+  Crosshair,
+  RotateCcw,
+  Square,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MapScreen, type MapRoute } from "@/components/mod/route-map";
@@ -15,6 +22,7 @@ import {
   type RouteOption,
   type Vehicle,
 } from "@/lib/api";
+import { nextManeuver, type Turn } from "@/lib/directions";
 import { routeProgress } from "@/lib/route-progress";
 import { shouldSuggestAlternative } from "@/lib/re-advice-trigger";
 import { addRecentTrip } from "@/lib/recent-trips";
@@ -23,6 +31,22 @@ import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
 const ALT_CHECK_INTERVAL_MS = 30_000;
 // Matches the copy: "we will not ask again for a few minutes."
 const ALT_DISMISS_COOLDOWN_MS = 5 * 60_000;
+
+const TURN_ICON = {
+  left: CornerUpLeft,
+  right: CornerUpRight,
+  "sharp-left": CornerUpLeft,
+  "sharp-right": CornerUpRight,
+  "u-turn": RotateCcw,
+} satisfies Record<Turn, typeof CornerUpLeft>;
+
+const TURN_LABEL: Record<Turn, string> = {
+  left: "Turn left",
+  right: "Turn right",
+  "sharp-left": "Sharp left",
+  "sharp-right": "Sharp right",
+  "u-turn": "U-turn",
+};
 
 export const Route = createFileRoute("/trip")({
   head: () => ({
@@ -92,6 +116,18 @@ function Trip() {
   const state = useMemo(
     () => (route && position.point ? routeProgress(route, position.point) : null),
     [route, position.point],
+  );
+
+  // Geometry-only: the corridor graph carries no street names (see
+  // DATA.md), so this can say "turn right in 150 m" and never "onto Ring
+  // Road." Only trustworthy near the route -- routeProgress's own
+  // offRouteBy threshold gates whether it is shown.
+  const maneuver = useMemo(
+    () =>
+      route && position.point && state && state.offRouteBy <= 120
+        ? nextManeuver(route, position.point)
+        : null,
+    [route, position.point, state],
   );
 
   // Feeds /coverage. A ping while the traveller is off the route is still
@@ -275,6 +311,19 @@ function Trip() {
           <h1 className="text-xl font-semibold tracking-tight">To {destination.name}</h1>
           {route && <span className="text-lg font-semibold">{minutes(route.seconds)}</span>}
         </header>
+
+        {maneuver &&
+          (() => {
+            const Icon = TURN_ICON[maneuver.turn];
+            return (
+              <section className="flex items-center gap-3 rounded-[6px] bg-foreground p-4 text-inverse">
+                <Icon size={28} aria-hidden />
+                <p className="text-lg font-semibold">
+                  {TURN_LABEL[maneuver.turn]} in {maneuver.distanceMetres} m
+                </p>
+              </section>
+            );
+          })()}
 
         {position.status === "denied" && (
           <section className="rounded-[6px] bg-surface p-4">
