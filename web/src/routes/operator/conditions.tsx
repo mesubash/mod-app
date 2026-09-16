@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { Console } from "@/components/mod/console";
 import { getReports, type Report } from "@/lib/api";
 
 export const Route = createFileRoute("/operator/conditions")({
@@ -47,20 +48,10 @@ function Conditions() {
   }, []);
 
   return (
-    <main className="mx-auto w-full max-w-[75rem] px-4 py-8 sm:px-6">
-      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-3 border-b border-border pb-4">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Reported conditions <span className="font-normal text-muted">last two hours</span>
-        </h1>
-        <nav className="flex gap-4 text-base">
-          <Link to="/operator" className="underline underline-offset-4">
-            Post a disruption
-          </Link>
-          <Link to="/operator/live" className="underline underline-offset-4">
-            Live
-          </Link>
-        </nav>
-      </header>
+    <Console>
+      <h2 className="mb-4 text-lg font-medium">
+        Reported conditions <span className="font-normal text-muted">last two hours</span>
+      </h2>
 
       <p className="mb-6 max-w-[60ch] text-base text-muted">
         These come from travellers, one tap each. Until probe collection exists they are the only
@@ -96,6 +87,6 @@ function Conditions() {
           </tbody>
         </table>
       )}
-    </main>
+    </Console>
   );
 }

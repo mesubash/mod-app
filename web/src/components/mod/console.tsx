@@ -1,66 +1,56 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { Screen } from "@/components/mod/ui";
-
-const tabs = [
+const TABS = [
   { to: "/operator", label: "Post a disruption" },
   { to: "/operator/live", label: "Live view" },
   { to: "/operator/conditions", label: "Reported conditions" },
 ] as const;
 
 /**
- * Console frame: the wordmark beside the console label, then the three views.
- * Desktop-first, but the tabs wrap and stay 44px tall so a duty officer can
- * post from a phone.
+ * Shared frame for the three operator screens: the wordmark once, all three
+ * tabs with the current one shown, a link back to the traveller app.
+ *
+ * Deliberately not wrapped in the traveller app's Screen component. Screen's
+ * padding exists to clear the traveller tab bar and side rail, and nav.tsx
+ * already hides both of those on every /operator/* route -- applying that
+ * padding here just leaves dead space that has nothing to clear.
  */
-export function Console({ current, children }: { current: string; children: ReactNode }) {
+export function Console({ children }: { children: ReactNode }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+
   return (
-    <Screen wide>
-      <div className="space-y-8">
-        <header className="space-y-4 border-b border-border pb-4">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-base font-semibold">MOD</span>
-            <span className="text-base text-muted">Operator console</span>
-          </div>
-          <nav className="flex flex-wrap gap-x-4 gap-y-1">
-            {tabs.map((tab) => (
-              <Link
-                key={tab.to}
-                to={tab.to}
-                className={`inline-flex min-h-[2.75rem] items-center rounded-md px-2 text-base hover:bg-surface-hover ${
-                  current === tab.to ? "bg-surface font-medium" : "text-muted"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            ))}
-          </nav>
-        </header>
+    <main className="mx-auto w-full max-w-[75rem] px-4 py-8 sm:px-6">
+      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-3 border-b border-border pb-4">
+        <h1 className="text-xl font-semibold tracking-tight">
+          MOD <span className="font-deva text-muted">मोड</span>{" "}
+          <span className="font-normal text-muted">operator console</span>
+        </h1>
+        <nav className="flex flex-wrap gap-x-4 gap-y-1 text-base">
+          {TABS.map((tab) => (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              aria-current={path === tab.to ? "page" : undefined}
+              className={
+                path === tab.to
+                  ? "font-medium underline underline-offset-4"
+                  : "text-muted underline underline-offset-4"
+              }
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      </header>
 
-        {children}
+      {children}
 
-        <div className="border-t border-border pt-6">
-          <Link
-            to="/"
-            className="inline-flex min-h-[2.75rem] items-center rounded-md px-1 text-base text-muted underline underline-offset-4 hover:bg-surface-hover hover:text-foreground"
-          >
-            Back to the traveller app
-          </Link>
-        </div>
+      <div className="mt-10 border-t border-border pt-6">
+        <Link to="/" className="text-base text-muted underline underline-offset-4">
+          Back to the traveller app
+        </Link>
       </div>
-    </Screen>
-  );
-}
-
-/** Dense operator row: a real table on desktop, stacked with inline labels below 640px. */
-export function Cell({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <td className="py-2 align-top max-sm:flex max-sm:gap-2 max-sm:py-1 sm:px-3 sm:first:pl-0">
-      <span aria-hidden="true" className="hidden text-muted max-sm:inline max-sm:min-w-[7.5rem]">
-        {label}
-      </span>
-      <span className="max-sm:flex-1">{children}</span>
-    </td>
+    </main>
   );
 }

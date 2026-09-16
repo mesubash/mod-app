@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { Console } from "@/components/mod/console";
 import { RouteMap, type MapRoute } from "@/components/mod/route-map";
 import {
   clearClosure,
@@ -81,22 +82,7 @@ function Operator() {
   const mapRoutes: MapRoute[] = geometry.length ? [{ geometry, tone: "closed" }] : [];
 
   return (
-    <main className="mx-auto w-full max-w-[75rem] px-4 py-8 sm:px-6">
-      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-3 border-b border-border pb-4">
-        <h1 className="text-xl font-semibold tracking-tight">
-          MOD <span className="font-deva text-muted">मोड</span>{" "}
-          <span className="font-normal text-muted">operator console</span>
-        </h1>
-        <nav className="flex gap-4 text-base">
-          <Link to="/operator/live" className="underline underline-offset-4">
-            Live
-          </Link>
-          <Link to="/operator/conditions" className="underline underline-offset-4">
-            Reported conditions
-          </Link>
-        </nav>
-      </header>
-
+    <Console>
       <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
         <section className="space-y-4">
           <h2 className="text-lg font-medium">Post a disruption</h2>
@@ -227,6 +213,6 @@ function Operator() {
           ))}
         </section>
       </div>
-    </main>
+    </Console>
   );
 }
