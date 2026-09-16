@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS trip_answers (
     already_knew   TEXT   NOT NULL,     -- yes | no
     created        REAL   NOT NULL
 );
+
+-- Round-robin position for which alternative route gets recommended next,
+-- per origin/destination/vehicle. See api/main.py's /route handler for what
+-- this is (an engineering default) and what it is not (a simulated result).
+CREATE TABLE IF NOT EXISTS spread_counters (
+    key     TEXT    PRIMARY KEY,
+    counter INTEGER NOT NULL
+);
 """
 
 
@@ -158,6 +166,23 @@ def edge_speed_coverage(db, within_minutes: int = 15) -> dict:
         "observations": row["observations"],
         "edges_with_data": row["edges"],
     }
+
+
+def next_spread_index(db, key: str, options: int) -> int:
+    """The next index to lead the alternatives list for this key, cycling
+    through `options` round-robin. Advances every call, so two travellers
+    who ask a moment apart get different answers."""
+    if options <= 1:
+        return 0
+    row = db.execute("SELECT counter FROM spread_counters WHERE key = ?", (key,)).fetchone()
+    counter = row["counter"] if row else 0
+    db.execute(
+        "INSERT INTO spread_counters (key, counter) VALUES (?, ?)"
+        " ON CONFLICT(key) DO UPDATE SET counter = excluded.counter",
+        (key, counter + 1),
+    )
+    db.commit()
+    return counter % options
 
 
 def median_speeds(db, within_minutes: int = 15) -> dict[str, float]:

@@ -23,7 +23,7 @@ from api.models import (
     RouteResponse,
     TripAnswerRequest,
 )
-from api.routing import alternatives
+from api.routing import alternatives, shortest
 
 GRAPH: graph_module.Graph | None = None
 DB = None
@@ -107,6 +107,20 @@ def route(request: RouteRequest) -> RouteResponse:
         closed=frozenset(shut),
         k=request.alternatives,
     )
+
+    # Spreading: rotate which alternative leads the list so travellers on the
+    # same origin/destination/vehicle are not all told the same "suggested"
+    # route. Only when this trip's own quickest path would actually have used
+    # a shut edge -- a traveller whose route was never going to touch the
+    # closure has nothing to spread. This is MOD's own engineering default,
+    # not a simulated result: see docs/product.md, "What the research does
+    # not support (yet)" for why it isn't cited to the study.
+    if shut and len(found) > 1:
+        unconstrained = shortest(GRAPH, origin, destination, VEHICLES[request.vehicle])
+        affected = unconstrained is not None and any(e in shut for e in unconstrained.edges)
+        if affected:
+            i = store.next_spread_index(DB, f"{origin}:{destination}:{request.vehicle}", len(found))
+            found = found[i:] + found[:i]
 
     return RouteResponse(
         routes=[
