@@ -12,6 +12,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { MapScreen, type MapRoute } from "@/components/mod/route-map";
+import { PlaceInput } from "@/components/mod/place-input";
 import { usePosition } from "@/hooks/use-position";
 import {
   fetchRoutes,
@@ -171,28 +172,32 @@ function Home() {
         )}
 
         <section className="route-fields">
-          <label className="block">
-            <span className="text-sm text-muted">Starting from</span>
-            <select
-              aria-label="Starting from"
-              value={useDevice ? "__device__" : from.name}
-              onChange={(e) => {
-                if (e.target.value === "__device__") {
-                  setUseDevice(true);
-                  position.ask();
-                } else {
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <PlaceInput
+                label="Starting from"
+                value={useDevice ? { name: "Where I am now", point: from.point } : from}
+                onChange={(p) => {
                   setUseDevice(false);
-                  setFrom(PLACES.find((p) => p.name === e.target.value) ?? from);
-                }
+                  setFrom(p);
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="Use my current location"
+              aria-pressed={useDevice}
+              onClick={() => {
+                setUseDevice(true);
+                position.ask();
               }}
-              className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
+              className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-[6px] border border-border ${
+                useDevice ? "bg-foreground text-inverse" : "bg-background hover:bg-surface-hover"
+              }`}
             >
-              {PLACES.map((p) => (
-                <option key={p.name}>{p.name}</option>
-              ))}
-              <option value="__device__">Where I am now</option>
-            </select>
-          </label>
+              <Crosshair size={18} aria-hidden />
+            </button>
+          </div>
 
           {useDevice && (
             <p className="flex items-center gap-2 text-sm text-muted">
@@ -207,21 +212,7 @@ function Home() {
             </p>
           )}
 
-          <label className="block">
-            <span className="text-sm text-muted">Going to</span>
-            <select
-              aria-label="Going to"
-              value={destination.name}
-              onChange={(e) =>
-                setDestination(PLACES.find((p) => p.name === e.target.value) ?? DEFAULT_DESTINATION)
-              }
-              className="mt-1 min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
-            >
-              {PLACES.map((p) => (
-                <option key={p.name}>{p.name}</option>
-              ))}
-            </select>
-          </label>
+          <PlaceInput label="Going to" value={destination} onChange={setDestination} />
           <button
             type="button"
             className="swap-places"

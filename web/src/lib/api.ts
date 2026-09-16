@@ -101,6 +101,12 @@ export const postProbes = (pings: Ping[]) =>
 
 export const getCoverage = () => json<Coverage>("/coverage");
 
+export type PlaceResult = { name: string; lon: number; lat: number };
+export type PlaceSearchResponse = { results: PlaceResult[]; configured: boolean };
+
+export const searchPlaces = (q: string) =>
+  json<PlaceSearchResponse>(`/places/search?q=${encodeURIComponent(q)}`);
+
 export const getReports = () => json<Report[]>("/reports");
 
 export const postReport = (kind: Report["kind"], at: Point) =>
