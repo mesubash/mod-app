@@ -2,7 +2,7 @@
 
 ## Layout
 
-```
+```text
 mod-app/
 ├── pyproject.toml              backend deps, managed with uv
 ├── docker-compose.yml          the API in a container
@@ -65,7 +65,7 @@ commit rather than silent drift.
 
 Regenerate it in the research repo with:
 
-```
+```text
 uv run python -m pipeline.export_graph
 ```
 

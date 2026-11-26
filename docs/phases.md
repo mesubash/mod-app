@@ -18,7 +18,8 @@ Phase 2 actually measures.
 
 Load the graph, route on it, expose one endpoint.
 
-**Build**
+### Build
+
 - Graph loader: read `data/corridor-graph.json.gz` once at startup into an
   adjacency structure held in memory.
 - Dijkstra with a hard exclusion set and a vehicle-class filter.
@@ -29,7 +30,8 @@ Load the graph, route on it, expose one endpoint.
 
 **Weights** are free-flow (`length / speed`) at this stage. No live data.
 
-**Done when**
+### Done when
+
 - A request returns a route in well under 100 ms.
 - A motorcycle and a car get different routes for at least one
   origin–destination pair that uses a motorcycle-only link.
@@ -45,7 +47,8 @@ Load the graph, route on it, expose one endpoint.
 
 The first shippable product. Works with zero live-traffic data.
 
-**Build**
+### Build
+
 - Closure store: an operator posts *this link is shut, from then until then*.
   Active closures become the exclusion set for affected routes.
 - Operator console: post a disruption; live view of how assignments split
@@ -57,7 +60,8 @@ The first shippable product. Works with zero live-traffic data.
 - After-trip questions, one tap each: *did you take the suggested route?* and
   *did you already know this route?*
 
-**Done when**
+### Done when
+
 - An operator can post a closure and a traveller sees a different route.
 - Both after-trip answers are recorded against the trip.
 - The app is honest when it has no traveller count to show.
@@ -73,7 +77,8 @@ anything.
 
 Start gathering the data the live version needs. Do not route on it yet.
 
-**Build**
+### Build
+
 - The app reports position periodically while a trip is active. Interval is a
   battery and data decision, not a technical one — Kathmandu users are
   price-sensitive about mobile data and every phone is a battery complaint
@@ -97,7 +102,8 @@ It decides whether Phase 4 is possible yet.
 
 Route on measured speeds where they exist, free-flow where they do not.
 
-**Build**
+### Build
+
 - Replace the weight function: measured speed for edges with recent data,
   falling back to free-flow.
 - A freshness rule — how old is too old — and an honest display when a route
@@ -112,7 +118,8 @@ the system can say which edges it actually had data for.
 
 A trip becomes a live session rather than a single question.
 
-**Build**
+### Build
+
 - Session state: origin, destination, vehicle class, current position, the
   advised route, the assigned alternative.
 - Re-advice on the three-part threshold in `product.md`. Never auto-accept,
@@ -128,7 +135,8 @@ minutes, and can decline without the app nagging.
 
 The research finding made operational. Last, because it needs everything above.
 
-**Build**
+### Build
+
 - Assignment counters: who has been sent down which alternative, decaying over
   a time window.
 - Proportional assignment: new travellers displaced by the same event are

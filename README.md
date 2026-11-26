@@ -1,168 +1,230 @@
-# MOD
+<p align="center">
+  <img src="web/public/favicon.svg" alt="MOD" width="72" height="72">
+</p>
 
-Route guidance for the Tripureshwor–Koteshwor corridor in Kathmandu.
+<h1 align="center">MOD</h1>
+
+<p align="center">
+  Route guidance for the Tripureshwor–Koteshwor corridor in Kathmandu.
+</p>
 
 When a road closes, everyone who checks a map is told to take the same
-next-best road, so the jam relocates rather than clears. MOD sends different
-travellers down *different* alternatives, and tells each of them honestly what
-it costs.
+next-best road, so the jam moves there instead of clearing. MOD splits the
+diverted travellers across different alternatives and tells each of them
+what their route costs.
 
-The name is the Nepali **मोड** — a turn, a bend in the road.
+The name is the Nepali **मोड**: a turn, a bend in the road.
 
-## Start here
+## What it does
 
-| Read | For |
-| --- | --- |
-| [`docs/product.md`](docs/product.md) | What this is, what it may and may not claim |
-| [`docs/phases.md`](docs/phases.md) | Build order, and what "done" means for each phase |
-| [`docs/architecture.md`](docs/architecture.md) | Folder layout and the decisions behind it |
-| [`docs/graph-format.md`](docs/graph-format.md) | The road graph file the router reads |
+A traveller saves the trip they make most days. On a normal morning the app
+says there is nothing wrong. When an operator posts a closure on that trip,
+the home screen shows what happened, the route this traveller is assigned,
+how much longer it takes than usual, and why it is theirs. They can accept it
+or pick another option. After the trip, two one-tap questions ask whether they
+took the route and whether they already knew it.
 
-**Read [`docs/product.md`](docs/product.md) before writing anything.** The
-product's claims are constrained by published research, and several
-obvious-looking features are forbidden for measured reasons rather than
-stylistic ones.
+The repository has three parts:
 
-Two further documents are binding but not kept in this repository:
-`AI-GUARDRAILS.md`, the coding and writing standard, and `UI-PROMPT.md`, the
-frontend design spec. They are working documents rather than repo content, held
-the same way in the research repo. Ask for them before building anything here;
-the frontend in particular cannot be built correctly without the second.
+- `api/` is the routing API, in Python and FastAPI. It holds the corridor
+  road graph in memory and returns up to five distinct routes, quickest
+  first, for a scooter, car, bus or truck, avoiding whatever is shut.
+- `web/` is the traveller app, in React 19 and TanStack Start, built for a
+  phone first. It covers onboarding, the home screen with and without a
+  disruption, other options, a trip in progress with re-advice, reporting a
+  problem, and the after-trip questions.
+- `web/src/routes/operator/` is the operator console, for a traffic control
+  desk. An operator sees the measured speed on a link before closing it,
+  watches how diverted travellers split across alternatives, and reads what
+  travellers report.
 
-## Where this comes from
-
-The routing approach is not guesswork. It comes out of a calibrated SUMO
-microsimulation of the same corridor, published at ICICSET 2026: *What Works
-and What Backfires — Mode Shift, Rerouting and Departure-Time Policy on a
-Saturated Kathmandu Corridor*.
-
-That study is a separate repository, [`mesubash/mod`](https://github.com/mesubash/mod),
-which is research-heavy and has no runtime relationship to this one. The only
-thing that crosses the boundary is `data/corridor-graph.json.gz`, exported from
-the calibrated network and committed here.
-
-What the study established, and this product is built on:
-
-- Diverting corridor trips onto alternatives reduces network delay, and the
-  effect grows with the share diverted — **−42.6 ± 2.5%** at a 20% share,
-  across 24 treatment-assignment seeds, with cordon throughput rising too.
-- Alternatives exist for essentially every corridor origin–destination pair.
-- Departure retiming **raises** delay at every share tested. The corridor's
-  morning peak is a plateau, not a spike, so moving trips to an adjacent hour
-  moves them into an hour that is already as busy.
+Vehicle class changes the answer: 488 edges in the corridor are open to a
+motorcycle and not to a car.
 
 ## Running it
 
-Needs [uv](https://docs.astral.sh/uv/).
+You need [uv](https://docs.astral.sh/uv/) for the API and
+[bun](https://bun.sh/) for the web app. Run each in its own terminal:
 
 ```sh
 uv sync
-uv run uvicorn api.main:app --reload
-uv run pytest
+uv run uvicorn api.main:app --reload     # http://localhost:8000
 ```
-
-One endpoint:
 
 ```sh
-curl -X POST localhost:8000/route -H 'content-type: application/json' -d '{
-  "origin":      {"lon": 85.3140, "lat": 27.6929},
-  "destination": {"lon": 85.3495, "lat": 27.6785},
-  "vehicle":     "motorcycle",
-  "closed":      []
-}'
+cd web
+bun install
+bun run dev                              # http://localhost:3000
 ```
 
-Returns the quickest route and up to five alternatives, each with its edge
-ids, free-flow seconds, metres, and the junction coordinates to draw it. An
-empty list is a real answer: the graph keeps disconnected pieces, and a
-closure can leave no way through.
-
-`vehicle` is one of `motorcycle`, `car`, `bus`, `truck`, and it changes the
-answer — 488 edges in the corridor are open to a motorcycle and not a car.
-
-In Docker:
+The API allows localhost origins by default, so nothing needs configuring for
+local use. To run the API in a container instead, with its database on a named volume:
 
 ```sh
 docker compose up --build
 ```
 
-## The frontend
+### Configuration
 
-TanStack Start on React 19, in `web/`. Needs [bun](https://bun.sh/).
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `MOD_OPERATOR_TOKEN` | API | Required to post or clear closures and to read reports and the split. Enter the same value in the operator console at `/operator`. |
+| `MOD_CORS_ORIGINS` | API | Comma-separated allowed origins. Unset allows localhost; empty allows none. |
+| `MOD_DB` | API | SQLite file path. Defaults to `data/mod.db`. |
+| `BAATO_API_KEY` | API | Turns on place search through [Baato](https://baato.io/). Without it the app uses its fixed list of corridor places. |
+| `VITE_API_URL` | Web | Where the browser finds the API. Defaults to `http://localhost:8000`. |
+
+`.env.example` lists the API variables. Copy it to `.env`, fill it in, and
+start the API with `uv run --env-file .env uvicorn api.main:app --reload`;
+Docker Compose reads `.env` on its own.
+
+In production, serve the web app and the API from one origin behind a reverse
+proxy, for example the API under `/api/` with the prefix stripped before it
+reaches the API. Build the web app with that address, since the browser
+otherwise calls `localhost:8000`:
 
 ```sh
 cd web
-bun install
-bun run dev      # http://localhost:3000
-bun run build
+VITE_API_URL=https://mod.example.org/api bun run build
 ```
 
-Both halves at once, in two terminals:
+With one origin the browser needs no cross-origin access, so set
+`MOD_CORS_ORIGINS` to empty to allow none.
+
+### Trying the API
 
 ```sh
-uv run uvicorn api.main:app
-cd web && bun run dev                # http://localhost:3000
+curl -X POST localhost:8000/route -H 'content-type: application/json' -d '{
+  "origin":      {"lon": 85.3140, "lat": 27.6929},
+  "destination": {"lon": 85.3495, "lat": 27.6785},
+  "vehicle":     "motorcycle"
+}'
 ```
 
-`docker compose up --build` runs the API in a container instead, if you want it
-detached from the shell.
+The response lists the routes with their edges, free-flow seconds, metres and
+junction coordinates. When an active closure sits on the trip it also gives
+the usual time and which route this traveller is assigned. An empty list is a
+real answer, not an error: a closure can leave no way through.
 
-Nothing to configure: the API allows localhost origins by default. The browser
-calls it directly rather than through a proxy, because TanStack Start's router
-answers every path before Vite or nitro can forward one. In production, serve
-both halves from one origin behind nginx and set `MOD_CORS_ORIGINS` to that
-origin, or to an empty string to allow none.
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /route` | Routes for one trip |
+| `GET /closures`, `POST /closures`, `DELETE /closures/{id}` | What is shut; posting and clearing need the operator token |
+| `POST /assignments` | A diverted traveller accepting a route |
+| `POST /reports`, `GET /reports` | Traveller reports: jam, flood, closed road, accident; reading needs the operator token |
+| `POST /trip-answers`, `GET /trip-answers/summary` | The two after-trip questions |
+| `POST /probes`, `GET /coverage`, `GET /flow` | Position pings turned into speed per edge, how much of the network has data, and the measured speed on one edge |
+| `GET /spread` | How diverted travellers have split across alternatives; needs the operator token |
+| `GET /places/search` | Place search through Baato |
 
-Posting closures needs `MOD_OPERATOR_TOKEN` set, and the same value entered in
-the operator console at `/operator`.
+### Tests
 
-Place search is proxied through Baato (`/places/search`) rather than called
-from the browser, per Baato's own guidance on keeping a key off the client.
-Set `BAATO_API_KEY` to turn it on. Unset, the endpoint returns an empty
-result with `configured: false` and nothing else changes -- the app keeps
-using its fixed corridor place list exactly as it does today. Baato's routing
-is not proxied anywhere and should not be: MOD's own router is the product.
+```sh
+uv run pytest        # API
+cd web && bun test   # web helpers
+```
 
-Every traveller screen is wired to the real API: onboarding (the usual trip,
-kept on the device, no account), home in its normal and disrupted states,
-other options, trip with continuous re-advice and geometry-only turn cues,
-report, and the two after-trip questions. Place search goes through Baato
-once `BAATO_API_KEY` is set. All three operator screens are wired too: post a
-disruption (with the measured flow on a link before closing it), a live view
-of real closures and how diverted travellers have split, and reported
-conditions.
+## The research behind it
+
+The approach comes from a calibrated SUMO microsimulation of the same
+corridor, accepted at ICICSET 2026: *What Works and What Backfires: Mode
+Shift, Rerouting and Departure-Time Policy on a Saturated Kathmandu
+Corridor*. The study lives in its own repository,
+[`mesubash/mod`](https://github.com/mesubash/mod). This repository takes one
+file from it, `data/corridor-graph.json.gz`, exported from the pre-filter
+corridor network build (the calibrated build drops the motorcycle-only
+edges; see [`docs/graph-format.md`](docs/graph-format.md)).
+
+What the study found:
+
+- Diverting a share of corridor trips onto an alternative route reduces
+  network delay, and the effect grows with the share: −14.4 ± 3.1% at 5%,
+  −25.7 ± 3.1% at 10% and −42.6 ± 2.5% at 20%, with cordon throughput rising
+  too. In the model every diverted traveller complied and took the same single
+  alternative, so these are not promises about the app.
+- Alternatives exist for essentially every origin–destination pair on the
+  corridor.
+- Moving departures earlier **raises** delay at every share tested, because
+  the morning peak is a plateau rather than a spike. That is why the app has
+  no rewards for leaving early.
+
+Splitting travellers across several alternatives, rather than sending them
+all to one, is MOD's own design choice. The study has no valid result for it
+yet. [`docs/product.md`](docs/product.md) lists what the research supports,
+what it rules out, and what is still unmeasured.
 
 ## Status
 
-Phase 1 (router as a service) and Phase 2 (closures, operator console,
-traveller app) are done, including the Phase 2 acceptance points in
-[`docs/phases.md`](docs/phases.md): a posted closure changes what a traveller
-is routed on, both after-trip answers are stored against the diverted route
-they are about, and no screen shows a traveller count the system does not
-have.
+| Phase | What | State |
+| --- | --- | --- |
+| 1 | Router as a service | Done |
+| 2 | Closures, operator console, traveller app | Done |
+| 3 | Probe collection | Built; needs real travellers to answer its question |
+| 4 | Live speeds in routing | Not built |
+| 5 | Continuous re-advice | Working, without a saved session |
+| 6 | Spreading across travellers | Working |
 
-Phase 3 (probe collection) is built but has not yet answered the question it
-exists for: how many active travellers the corridor needs before edge speeds
-are usable. That needs real travellers. Phase 4 (live weights) is not built;
-routing is free-flow only. Free-flow times assume clear roads, and every
-screen that shows one says so.
+Routing uses free-flow times, which assume clear roads, and every screen that
+shows a time says so. Phase 3 exists to find out how many active travellers
+the corridor needs before measured speeds are usable; until that is known,
+Phase 4 cannot start. Phases 5 and 6 were built before Phase 4, so neither has
+run on live speeds. A diverted traveller is assigned whichever alternative
+the fewest others on the same trip have accepted recently, and is counted only
+once they accept. [`docs/phases.md`](docs/phases.md) defines what "done"
+means for each phase.
 
-Phase 5 (continuous re-advice) and Phase 6 (spreading) have real, tested
-pieces built ahead of Phase 4, which is out of the order `docs/phases.md`
-sets. That happened on explicit direction to build them at once. Phase 6
-assigns a diverted traveller the alternative the fewest others on the same
-trip have accepted recently, and counts a traveller only when they accept, so
-the operator's split is people rather than page loads. Phase 5 still keeps a
-trip in the trip screen's own state rather than a persisted session, and
-neither phase has run against live weights, since those do not exist yet.
+## Documentation
 
-Measured on the corridor graph: 4.7 ms for one route, 14.7 ms for three
-alternatives, 22 ms end to end over HTTP. About 54 MB resident.
+| Read | For |
+| --- | --- |
+| [`docs/product.md`](docs/product.md) | What the product may and may not claim, and why |
+| [`docs/phases.md`](docs/phases.md) | Build order and what "done" means for each phase |
+| [`docs/architecture.md`](docs/architecture.md) | Folder layout and the decisions behind it |
+| [`docs/graph-format.md`](docs/graph-format.md) | The road graph file the router reads |
+| [`DATA.md`](DATA.md) | Where the road graph comes from and its licence |
+
+Read `docs/product.md` before changing anything. Several features that look
+useful are ruled out by measured results, not by taste.
+
+The project is not taking outside contributions yet. Issues are welcome.
+
+## Privacy
+
+There are no accounts, and nothing stored names a person.
+
+- The usual trip and the last five trips are kept in the browser's local
+  storage on the traveller's phone. Each route request sends the trip's
+  start, end and vehicle type to the API, which uses them to route and does
+  not store them.
+- Position pings from a trip are matched to roads inside the request. The
+  sequence of positions is discarded; what is stored is a road, a speed and a
+  time.
+- A problem report stores its type, the exact coordinates and the time.
+  Only the operator token can read reports, through `GET /reports`.
+- Accepting a diverted route stores the trip's two end junction ids, the
+  vehicle type, the route option number and the time. Anyone routing the
+  same disrupted trip sees how many travellers accepted each option in the
+  last two hours. The split across every trip, `GET /spread`, needs the
+  operator token.
+- After-trip answers store the two answers and the time. Sent from a trip,
+  they also store the trip's two end junction ids, the vehicle type and the
+  route option number.
+
+The operator console keeps the operator token in the browser's local storage
+until site data is cleared, so use it on a trusted device.
+
+The browser also loads map tiles from [OpenFreeMap](https://openfreemap.org/)
+and fonts from Google Fonts. With `BAATO_API_KEY` set, place search text is
+sent to Baato.
+
+Nothing is deleted automatically yet. The time windows in the API limit what
+it returns, not what the database keeps; records stay until the database file
+is cleared.
 
 ## Licence
 
-MIT for the code (`LICENSE`).
+The code is MIT ([`LICENSE`](LICENSE)). The road graph is derived from
+OpenStreetMap and is under the Open Database Licence, which requires
+attribution and share-alike for derived databases. See [`DATA.md`](DATA.md).
 
-The road graph is a derived database from OpenStreetMap and carries ODbL
-share-alike terms instead. See [`DATA.md`](DATA.md) — this matters if you reuse
-it, and the product must credit OpenStreetMap on its "How it works" page.
+Road data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).

@@ -1,7 +1,7 @@
 # The road graph file
 
 `data/corridor-graph.json.gz` — gzipped JSON, about 0.6 MB compressed and
-3.6 MB raw. Exported from the calibrated SUMO network in the research repo by
+3.6 MB raw. Exported from the pre-filter SUMO network build in the research repo by
 `pipeline/export_graph.py`.
 
 11,693 nodes, 28,719 edges, covering the Tripureshwor–Koteshwor corridor.
