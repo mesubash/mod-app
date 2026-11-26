@@ -1,11 +1,27 @@
 <p align="center">
-  <img src="web/public/favicon.svg" alt="MOD" width="72" height="72">
+  <img src="web/public/favicon.svg" alt="MOD" width="80" height="80">
 </p>
 
-<h1 align="center">MOD</h1>
+<h1 align="center">MOD <sub>मोड</sub></h1>
 
 <p align="center">
-  Route guidance for the Tripureshwor–Koteshwor corridor in Kathmandu.
+  Route guidance for the Tripureshwor–Koteshwor corridor in Kathmandu.<br>
+  When a road closes, MOD spreads the diverted traffic instead of moving the jam.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="Code: MIT" src="https://img.shields.io/badge/code-MIT-171717"></a>
+  <a href="DATA.md"><img alt="Road data: ODbL" src="https://img.shields.io/badge/road%20data-ODbL-171717"></a>
+  <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-171717">
+  <img alt="React 19" src="https://img.shields.io/badge/react-19-171717">
+</p>
+
+<p align="center">
+  <a href="https://github.com/mesubash/mod">Research repository</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#running-it">Running it</a> ·
+  <a href="docs/product.md">What it may claim</a> ·
+  <a href="#status">Status</a>
 </p>
 
 When a road closes, everyone who checks a map is told to take the same
@@ -13,7 +29,9 @@ next-best road, so the jam moves there instead of clearing. MOD splits the
 diverted travellers across different alternatives and tells each of them
 what their route costs.
 
-The name is the Nepali **मोड**: a turn, a bend in the road.
+It is built on a calibrated traffic simulation of the same corridor, kept in
+its own repository: [`mesubash/mod`](https://github.com/mesubash/mod). The
+name is the Nepali **मोड**: a turn, a bend in the road.
 
 ## What it does
 
@@ -40,6 +58,26 @@ The repository has three parts:
 
 Vehicle class changes the answer: 488 edges in the corridor are open to a
 motorcycle and not to a car.
+
+## How it works
+
+```mermaid
+flowchart LR
+    O["Operator<br/>posts a closure"] --> A["Routing API<br/>avoids shut roads"]
+    T["Traveller<br/>opens the app"] --> A
+    A --> R["Assigned route<br/>least taken alternative,<br/>with its extra time"]
+    R -->|"Got it"| C["Acceptance<br/>recorded"]
+    C --> Q["After the trip<br/>two one-tap questions"]
+    C --> S["Operator live view<br/>split across routes"]
+    Q --> S
+```
+
+A closure on a traveller's usual quickest path marks the trip as diverted.
+The API then assigns whichever alternative the fewest travellers on the same
+trip have accepted in the last two hours, so the diversion is spread rather
+than piled onto one road. Nothing is counted until the traveller accepts, and
+the after-trip answers show the operator whether people took the route they
+were given.
 
 ## Running it
 
