@@ -103,6 +103,8 @@ export function PlaceInput({
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
+          autoComplete="off"
+          spellCheck={false}
           aria-activedescendant={
             open && options[highlighted] ? `${listId}-${highlighted}` : undefined
           }

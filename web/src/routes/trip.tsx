@@ -1,4 +1,4 @@
-import { createFileRoute, Link, type SearchSchemaInput } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   CircleAlert,
   CornerUpLeft,
@@ -26,7 +26,7 @@ import { nextManeuver, type Turn } from "@/lib/directions";
 import { routeProgress } from "@/lib/route-progress";
 import { shouldSuggestAlternative } from "@/lib/re-advice-trigger";
 import { addRecentTrip } from "@/lib/recent-trips";
-import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
+import { DEFAULT_DESTINATION, PLACES, VEHICLES, tripSearch } from "@/lib/places";
 
 const ALT_CHECK_INTERVAL_MS = 30_000;
 // Matches the copy: "we will not ask again for a few minutes."
@@ -58,18 +58,7 @@ export const Route = createFileRoute("/trip")({
       },
     ],
   }),
-  validateSearch: (search: Record<string, unknown> & SearchSchemaInput) => ({
-    from:
-      search["from"] === "__device__"
-        ? "__device__"
-        : (PLACES.find((p) => p.name === search["from"])?.name ?? PLACES[2]!.name),
-    to: PLACES.find((p) => p.name === search["to"])?.name ?? DEFAULT_DESTINATION.name,
-    vehicle: VEHICLES.find((v) => v.id === search["vehicle"])?.id ?? "motorcycle",
-    option:
-      Number.isInteger(Number(search["option"])) && Number(search["option"]) >= 0
-        ? Number(search["option"])
-        : 0,
-  }),
+  validateSearch: tripSearch,
   component: Trip,
 });
 
@@ -87,6 +76,9 @@ function Trip() {
   const [from, setFrom] = useState(PLACES.find((p) => p.name === search.from) ?? PLACES[2]!);
   const [useDevice, setUseDevice] = useState(search.from === "__device__");
   const [route, setRoute] = useState<RouteOption | null>(null);
+  // Carried to the after-trip questions so the answer counts against the
+  // diverted route it is about.
+  const [spreadKey, setSpreadKey] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [failed, setFailed] = useState(false);
 
@@ -102,6 +94,7 @@ function Trip() {
       .then((r) => {
         if (cancelled) return;
         const next = r.routes[search.option] ?? r.routes[0];
+        setSpreadKey(r.spread_key);
         if (next) setRoute(next);
         else setFailed(true);
       })
@@ -401,6 +394,7 @@ function Trip() {
           </Link>
           <Link
             to="/after-trip"
+            search={spreadKey ? { key: spreadKey, option: search.option } : {}}
             onClick={() => setRunning(false)}
             className="inline-flex min-h-11 items-center gap-2 rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
           >

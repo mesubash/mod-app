@@ -1,10 +1,7 @@
 import { Meta, PrimaryButton } from "@/components/mod/ui";
 
 /**
- * The road ahead changed: two equal-weight choices, no default. Used both by
- * a running trip (a real alternative, computed from where the traveller
- * actually is) and by the standalone /re-advice screen (a fixed mock, for
- * reviewing the interaction on its own).
+ * The road ahead changed: two equal-weight choices, no default.
  */
 export function ReAdvicePrompt({
   what,

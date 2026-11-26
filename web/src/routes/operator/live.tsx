@@ -10,6 +10,7 @@ import {
   type Closure,
   type SpreadSplit,
 } from "@/lib/api";
+import { VEHICLES, nearest } from "@/lib/places";
 
 export const Route = createFileRoute("/operator/live")({
   head: () => ({
@@ -26,9 +27,11 @@ export const Route = createFileRoute("/operator/live")({
 
 const TOKEN_KEY = "mod.operator.token";
 
-// Below this many affected travellers, round-robin is not "balancing load,"
-// it's two or three requests -- see docs/phases.md, Phase 6: "Below a
-// density threshold this changes nothing... be honest about that."
+// Below this many diverted travellers, spreading is not balancing load, it is
+// a handful of people -- see docs/phases.md, Phase 6: "Below a density
+// threshold this changes nothing." ponytail: a fixed guess, not a measured
+// threshold; replace it once Phase 3 says how many travellers the corridor
+// needs.
 const MEANINGFUL_SPREAD_TOTAL = 10;
 
 function LiveView() {
@@ -110,39 +113,47 @@ function LiveView() {
           </p>
         ) : (
           <>
-            <p className="text-sm text-muted">
-              An affected traveller's leading alternative, last {spreadWindowMinutes} minutes. Keys
-              are graph node ids, not place names -- there is no reverse-geocoder.
+            <p className="text-base text-muted">
+              Diverted travellers who accepted each alternative in the last {spreadWindowMinutes}{" "}
+              minutes, and how many of those later said they took it.
             </p>
             {splits.reduce((a, s) => a + s.counts.reduce((x, y) => x + y, 0), 0) <
               MEANINGFUL_SPREAD_TOTAL && (
-              <p className="text-sm text-muted">
-                Fewer than {MEANINGFUL_SPREAD_TOTAL} affected requests in this window. At this
+              <p className="text-base text-muted">
+                Fewer than {MEANINGFUL_SPREAD_TOTAL} diverted travellers in this window. At this
                 volume, spreading is not meaningfully balancing anything yet.
               </p>
             )}
-            {splits.map((s) => {
-              const max = Math.max(...s.counts, 1);
-              return (
-                <div key={s.key} className="rounded-[6px] bg-surface p-3">
-                  <p className="font-mono text-xs text-muted">{s.key}</p>
-                  <div className="mt-2 space-y-1">
+            {splits.map((s) => (
+              <div key={s.key} className="rounded-[6px] bg-surface p-4">
+                <h3 className="text-base font-medium">
+                  {nearest(s.origin).name} to {nearest(s.destination).name},{" "}
+                  {VEHICLES.find((v) => v.id === s.vehicle)?.label.toLowerCase() ?? s.vehicle}
+                </h3>
+                <table className="split-table mt-2 w-full text-left text-base">
+                  <thead className="text-muted">
+                    <tr>
+                      <th className="font-normal">Route</th>
+                      <th className="font-normal">Assigned</th>
+                      <th className="font-normal">Said they took it</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {s.counts.map((n, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="w-14 shrink-0 text-sm text-muted">Alt {i + 1}</span>
-                        <div className="h-3 flex-1 overflow-hidden rounded-full bg-border">
-                          <div
-                            className="h-3 rounded-full bg-foreground"
-                            style={{ width: `${(n / max) * 100}%` }}
-                          />
-                        </div>
-                        <span className="w-6 shrink-0 text-right text-sm">{n}</span>
-                      </div>
+                      <tr key={i}>
+                        <td data-label="Route">Option {i + 1}</td>
+                        <td data-label="Assigned">{n}</td>
+                        <td data-label="Said they took it">
+                          {s.answered[i]
+                            ? `${s.took[i]} of ${s.answered[i]} who answered`
+                            : "No answers yet"}
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-              );
-            })}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </>
         )}
       </section>

@@ -14,6 +14,12 @@ export const Route = createFileRoute("/after-trip")({
       },
     ],
   }),
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { key?: string | undefined; option?: number | undefined } => ({
+    key: typeof search["key"] === "string" ? search["key"] : undefined,
+    option: Number.isInteger(search["option"]) ? (search["option"] as number) : undefined,
+  }),
   component: AfterTrip,
 });
 
@@ -21,6 +27,7 @@ const choice = "min-h-11 rounded-[6px] bg-surface px-4 text-base hover:bg-surfac
 const chosen = "min-h-11 rounded-[6px] bg-foreground px-4 text-base text-inverse";
 
 function AfterTrip() {
+  const { key, option } = Route.useSearch();
   const [took, setTook] = useState<string | null>(null);
   const [knew, setKnew] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -30,10 +37,10 @@ function AfterTrip() {
   // because a form is exactly what would stop people answering.
   useEffect(() => {
     if (!took || !knew || saved) return;
-    postTripAnswer(took, knew)
+    postTripAnswer(took, knew, key, key ? option : undefined)
       .then(() => setSaved(true))
       .catch(() => setFailed(true));
-  }, [took, knew, saved]);
+  }, [took, knew, saved, key, option]);
 
   return (
     <Screen>

@@ -50,8 +50,23 @@ function HowItWorks() {
             saves, and you decide. It will not keep changing its mind while you ride.
           </p>
           <p>
-            MOD does not give turn-by-turn directions. It tells you what is wrong ahead, which
-            alternative is yours, and why.
+            MOD is not a navigation app. The trip screen shows the next turn on your route, worked
+            out from the shape of the road alone, but its job is to tell you what is wrong ahead,
+            which alternative is yours, and why.
+          </p>
+          <p>
+            Times are free-flow estimates: how long the route takes with the roads clear. MOD has no
+            live traffic feed for this corridor yet and does not pretend to.
+          </p>
+          <p className="text-base text-muted">
+            Road data ©{" "}
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              className="underline underline-offset-4"
+            >
+              OpenStreetMap contributors
+            </a>
+            , available under the Open Database Licence.
           </p>
         </div>
 

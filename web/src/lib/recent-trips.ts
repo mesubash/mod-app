@@ -12,10 +12,9 @@ export type RecentTrip = {
 
 /**
  * Recent trips, most recent first. There is no account system here, so this
- * is per-device storage rather than a saved-trip feature tied to a person --
- * it does the same job (do not make a returning traveller reselect their
- * commute) without taking on phone verification and a user store, which
- * UI-PROMPT's onboarding sketch assumes but nothing in this repo builds.
+ * and the usual trip below are per-device storage rather than anything tied
+ * to a person. UI-PROMPT's onboarding sketch has phone verification; it is
+ * left out because nothing here needs to know who a traveller is.
  */
 export function getRecentTrips(): RecentTrip[] {
   if (typeof window === "undefined") return [];
@@ -37,5 +36,39 @@ export function addRecentTrip(trip: Omit<RecentTrip, "at">): void {
     window.localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
     // A private window or a full quota loses the convenience, not the trip.
+  }
+}
+
+const USUAL = "mod.usualTrip";
+const ONBOARDED = "mod.onboarded";
+
+export type UsualTrip = Omit<RecentTrip, "at">;
+
+/** The trip saved at onboarding, which the home screen opens on. */
+export function getUsualTrip(): UsualTrip | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(USUAL);
+    return raw ? (JSON.parse(raw) as UsualTrip) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Saving a trip and skipping both count: onboarding is offered once. */
+export function finishOnboarding(trip: UsualTrip | null): void {
+  try {
+    if (trip) window.localStorage.setItem(USUAL, JSON.stringify(trip));
+    window.localStorage.setItem(ONBOARDED, "1");
+  } catch {
+    // Without storage the app still works; it just asks again next visit.
+  }
+}
+
+export function onboarded(): boolean {
+  try {
+    return window.localStorage.getItem(ONBOARDED) === "1";
+  } catch {
+    return true;
   }
 }

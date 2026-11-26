@@ -7,11 +7,13 @@ import {
   clearClosure,
   fetchRoutes,
   getClosures,
+  getFlow,
   postClosure,
   until,
   type Closure,
+  type Flow,
 } from "@/lib/api";
-import { PLACES } from "@/lib/places";
+import { PLACES, nearPlace } from "@/lib/places";
 
 export const Route = createFileRoute("/operator/")({
   head: () => ({
@@ -41,6 +43,7 @@ function Operator() {
   const [minutes, setMinutes] = useState(60);
   const [active, setActive] = useState<Closure[]>([]);
   const [note, setNote] = useState<string | null>(null);
+  const [flow, setFlow] = useState<Flow | null | "failed">(null);
 
   useEffect(() => {
     setToken(localStorage.getItem(TOKEN_KEY) ?? "");
@@ -67,6 +70,19 @@ function Operator() {
       .catch(() => setEdges([]));
   }, [from, to]);
 
+  const picked = pick !== null ? edges[pick] : undefined;
+  useEffect(() => {
+    setFlow(null);
+    if (!picked) return;
+    let cancelled = false;
+    getFlow(picked)
+      .then((f) => !cancelled && setFlow(f))
+      .catch(() => !cancelled && setFlow("failed"));
+    return () => {
+      cancelled = true;
+    };
+  }, [picked]);
+
   async function publish() {
     if (pick === null || !edges[pick]) return;
     try {
@@ -79,7 +95,14 @@ function Operator() {
     }
   }
 
-  const mapRoutes: MapRoute[] = geometry.length ? [{ geometry, tone: "closed" }] : [];
+  const mapRoutes: MapRoute[] = geometry.length
+    ? [
+        { geometry, tone: "other" },
+        ...(pick !== null && geometry[pick + 1]
+          ? [{ geometry: [geometry[pick]!, geometry[pick + 1]!], tone: "closed" as const }]
+          : []),
+      ]
+    : [];
 
   return (
     <Console>
@@ -127,12 +150,22 @@ function Operator() {
             >
               {edges.map((edge, i) => (
                 <option key={edge} value={i}>
-                  {i + 1}. {edge}
+                  {i + 1}.{" "}
+                  {geometry[i] ? nearPlace({ lon: geometry[i]![0], lat: geometry[i]![1] }) : edge}
                 </option>
               ))}
             </select>
           </label>
 
+          <p className="text-base" role="status">
+            {flow === null
+              ? "Checking current flow on this link…"
+              : flow === "failed"
+                ? "Could not read current flow on this link."
+                : flow.measured_kmh === null
+                  ? `Current flow unknown: no traveller has crossed this link in the last ${flow.window_minutes} minutes.`
+                  : `Moving at about ${flow.measured_kmh} km/h over the last ${flow.window_minutes} minutes.`}
+          </p>
           <div className="flex flex-wrap gap-3">
             <label className="flex-1 text-sm text-muted">
               Reason

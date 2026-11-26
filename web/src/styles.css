@@ -28,16 +28,16 @@
 }
 
 :root {
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.205 0 0);
-  --surface: oklch(0.961 0 0);
-  --surface-hover: oklch(0.937 0 0);
-  --border: oklch(0.933 0 0);
-  --border-strong: oklch(0.87 0 0);
-  --muted: oklch(0.556 0 0);
-  --inverse: oklch(1 0 0);
-  --alert: oklch(0.52 0.083 90);
-  --confirm: oklch(0.5 0.078 155);
+  --background: #fafafa;
+  --foreground: #171717;
+  --surface: #f2f2f2;
+  --surface-hover: #ebebeb;
+  --border: #eaeaea;
+  --border-strong: #d4d4d4;
+  --muted: #666666;
+  --inverse: #ffffff;
+  --alert: #8a6d1f;
+  --confirm: #2f6f4f;
 }
 
 @layer base {
@@ -146,6 +146,12 @@ button:disabled {
   color: var(--muted);
   margin-top: 4px;
 }
+/* A disrupted trip is the screen the product exists for: on a phone the panel
+   grows so "Got it" sits in the bottom third, within thumb reach, and the
+   map keeps the lower part of the screen. */
+.map-panel:has([data-disrupted]) {
+  height: 66%;
+}
 .route-fields {
   position: relative;
   display: grid;
@@ -181,7 +187,7 @@ button:disabled {
 }
 .vehicle-options button {
   padding: 8px 2px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   gap: 4px;
   justify-content: center;
   white-space: nowrap;
@@ -194,7 +200,7 @@ button:disabled {
   font-size: 1rem;
 }
 .route-summary p {
-  font-size: 0.875rem;
+  font-size: 1rem;
 }
 .alternative-route {
   display: flex;
@@ -205,7 +211,7 @@ button:disabled {
   min-height: 56px;
   padding: 10px 12px;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 1rem;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
@@ -218,6 +224,7 @@ button:disabled {
 }
 .alternative-route small {
   display: block;
+  font-size: 0.875rem;
   color: var(--muted);
 }
 .alternative-route strong {
@@ -226,7 +233,7 @@ button:disabled {
 }
 .planner-footnote {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 .retry-button {
   display: block;
@@ -292,6 +299,9 @@ button:disabled {
   .map-controls {
     right: 24px;
   }
+  .map-panel:has([data-disrupted]) {
+    height: auto;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -336,5 +346,40 @@ button:disabled {
   .mobile-route-button,
   .mobile-edit-button {
     display: none;
+  }
+}
+
+/* The operator's split table: stacked rows with inline labels on a phone
+   rather than a box that scrolls sideways, a plain table from 640px up. */
+.split-table thead {
+  display: none;
+}
+.split-table tr {
+  display: block;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.split-table td {
+  display: block;
+}
+.split-table td::before {
+  content: attr(data-label) ": ";
+  color: var(--muted);
+}
+@media (min-width: 640px) {
+  .split-table thead {
+    display: table-header-group;
+  }
+  .split-table tr {
+    display: table-row;
+    padding: 0;
+  }
+  .split-table th,
+  .split-table td {
+    display: table-cell;
+    padding: 4px 12px 4px 0;
+  }
+  .split-table td::before {
+    content: none;
   }
 }

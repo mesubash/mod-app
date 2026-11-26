@@ -1,10 +1,13 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownUp,
   ArrowRight,
+  Ban,
   Bike,
   Bus,
+  CalendarClock,
   Car,
+  CloudRain,
   Crosshair,
   TriangleAlert,
   Truck,
@@ -15,18 +18,26 @@ import { MapScreen, type MapRoute } from "@/components/mod/route-map";
 import { PlaceInput } from "@/components/mod/place-input";
 import { usePosition } from "@/hooks/use-position";
 import {
+  difference,
   fetchRoutes,
   getClosures,
+  postAssignment,
   kilometres,
   minutes,
-  until,
+  clock,
   type Closure,
   type Point,
   type RouteResponse,
   type Vehicle,
 } from "@/lib/api";
-import { DEFAULT_DESTINATION, PLACES, VEHICLES } from "@/lib/places";
-import { getRecentTrips, type RecentTrip } from "@/lib/recent-trips";
+import { DEFAULT_DESTINATION, PLACES, VEHICLES, viaNames } from "@/lib/places";
+import {
+  getRecentTrips,
+  getUsualTrip,
+  onboarded,
+  type RecentTrip,
+  type UsualTrip,
+} from "@/lib/recent-trips";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -42,6 +53,14 @@ export const Route = createFileRoute("/")({
 });
 
 const ICON = { motorcycle: Bike, car: Car, bus: Bus, truck: Truck };
+
+// Status carries an icon and a word, never colour alone.
+const CLOSURE_KIND = {
+  closure: { icon: Ban, word: "Road closed" },
+  accident: { icon: TriangleAlert, word: "Accident" },
+  weather: { icon: CloudRain, word: "Weather" },
+  event: { icon: CalendarClock, word: "Event" },
+};
 
 function Home() {
   const navigate = useNavigate();
@@ -75,10 +94,19 @@ function Home() {
   // re-renders the whole page client-side. Starting from [] on both sides
   // and filling it in afterwards keeps the two renders identical.
   useEffect(() => {
+    if (!onboarded()) {
+      navigate({ to: "/onboarding" });
+      return;
+    }
     setRecent(getRecentTrips());
+    const usual = getUsualTrip();
+    if (usual) applyRecent(usual);
+    // Once, on arrival: the saved trip is where the screen starts, not a
+    // value it keeps snapping back to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function applyRecent(trip: RecentTrip) {
+  function applyRecent(trip: UsualTrip) {
     if (trip.from === "__device__") {
       setUseDevice(true);
       position.ask();
@@ -105,6 +133,7 @@ function Home() {
       .then((r) => {
         if (cancelled) return;
         setResult(r);
+        setSelected(r.assigned);
         setState("idle");
       })
       .catch(() => !cancelled && setState("error"));
@@ -114,6 +143,31 @@ function Home() {
   }, [origin, destination, vehicle, retry]);
 
   const best = result?.routes[selected];
+  const names = useMemo(
+    () =>
+      result && origin
+        ? viaNames(
+            result.routes.map((r) => r.geometry),
+            [origin, destination.point],
+          )
+        : [],
+    // origin is derived each render; result only changes after a fetch for it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [result],
+  );
+  const trip = {
+    from: useDevice ? "__device__" : from.name,
+    to: destination.name,
+    vehicle,
+    option: selected,
+  };
+
+  function start() {
+    // Counted on acceptance so the operator's split is travellers, not
+    // page loads. A failed count must not stop anyone setting off.
+    if (result?.spread_key) postAssignment(result.spread_key, selected).catch(() => {});
+    navigate({ to: "/trip", search: trip });
+  }
   const mapRoutes: MapRoute[] = useMemo(
     () =>
       result?.routes.map((r, i) => ({
@@ -123,28 +177,121 @@ function Home() {
     [result, selected],
   );
 
+  const disrupted = result?.usual_seconds != null;
+  // A disrupted trip leads with its assigned route: that screen is the
+  // product, and a traveller stopped at a closure should not scroll for it.
+  const routeBlock = best && result && (
+    <>
+      <section
+        className={disrupted ? "rounded-[6px] bg-surface p-4" : "route-summary"}
+        data-disrupted={disrupted || undefined}
+      >
+        {disrupted && (
+          <div className="mb-3 space-y-2">
+            {closures.map((c) => (
+              <ClosureLine key={c.id} closure={c} />
+            ))}
+          </div>
+        )}
+        {result.usual_seconds == null && (
+          <button
+            className="mobile-edit-button"
+            onClick={(e) => e.currentTarget.closest(".map-panel")?.scrollTo({ top: 0 })}
+          >
+            Edit journey
+          </button>
+        )}
+        {result.usual_seconds != null ? (
+          <>
+            <h2 className="text-lg font-medium">
+              Your route: {names[selected] ? `via ${names[selected]}` : `option ${selected + 1}`}
+            </h2>
+            <p className="mt-1 text-base">
+              {minutes(best.seconds)}, {difference(best.seconds, result.usual_seconds, "usual")}.
+              <span className="text-muted"> {kilometres(best.metres)}, free-flow estimate.</span>
+            </p>
+            <p className="mt-2 text-base text-muted">
+              {result.routes.length > 1
+                ? `Travellers on this trip are split across ${result.routes.length} routes, so no single road takes the whole diversion.`
+                : "This is the only way through while the road is shut."}
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-lg font-medium">To {destination.name}</h2>
+              <span className="text-lg font-semibold">{minutes(best.seconds)}</span>
+            </div>
+            <p className="mt-1 text-base text-muted">
+              {closures.length > 0
+                ? "None of the active closures is on your route."
+                : "No disruptions on your route."}
+            </p>
+          </>
+        )}
+        {!disrupted && (
+          <p className="mt-1 text-sm text-muted">{kilometres(best.metres)} · free-flow estimate</p>
+        )}
+        <button
+          type="button"
+          onClick={start}
+          className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
+        >
+          {result.usual_seconds != null ? "Got it" : "Start trip"}
+          <ArrowRight size={18} className="ml-2" aria-hidden />
+        </button>
+        {result.usual_seconds != null && result.routes.length > 1 && (
+          <Link
+            to="/alternatives"
+            search={trip}
+            className="mt-2 inline-flex min-h-11 items-center rounded-[6px] px-1 text-base underline underline-offset-4 hover:bg-surface-hover"
+          >
+            Show other options
+          </Link>
+        )}
+      </section>
+
+      {result.usual_seconds == null && result.routes.length > 1 && (
+        <section className="space-y-2">
+          <h2 className="text-base font-medium">Route options</h2>
+          {result.routes.map((r, i) => (
+            <button
+              type="button"
+              key={i}
+              onClick={() => setSelected(i)}
+              aria-pressed={selected === i}
+              className="alternative-route"
+            >
+              <span>
+                {i === 0 ? "Quickest" : names[i] ? `Via ${names[i]}` : `Option ${i + 1}`}
+                <small>{kilometres(r.metres)}</small>
+              </span>
+              <strong>{minutes(r.seconds)}</strong>
+            </button>
+          ))}
+        </section>
+      )}
+    </>
+  );
+
   return (
     <MapScreen position={position} routes={mapRoutes} label={`Routes to ${destination.name}`}>
       <div className="space-y-4">
-        <header className="planner-heading">
+        <header className={disrupted ? "sr-only" : "planner-heading"}>
           <h1>Where are you going?</h1>
         </header>
 
-        {closures.length > 0 && (
+        {!disrupted && closures.length > 0 && (
           <section className="space-y-2">
             {closures.map((c) => (
               <div key={c.id} className="rounded-[6px] bg-surface p-4">
-                <h2 className="flex items-start gap-2 text-base font-medium text-alert">
-                  <TriangleAlert size={20} className="mt-0.5 shrink-0" aria-hidden />
-                  {c.reason}
-                </h2>
-                <p className="mt-1 text-base text-muted">
-                  {c.kind} · clears in {until(c.ends)}. Routes account for active closures.
-                </p>
+                <ClosureLine closure={c} />
               </div>
             ))}
           </section>
         )}
+
+        {disrupted && routeBlock}
 
         {recent.length > 0 && (
           <section className="space-y-2">
@@ -249,7 +396,7 @@ function Home() {
           })}
         </div>
 
-        {best && (
+        {best && !disrupted && (
           <button
             className="mobile-route-button"
             onClick={(e) =>
@@ -279,63 +426,7 @@ function Home() {
           </p>
         )}
 
-        {best && (
-          <>
-            <section className="route-summary">
-              <button
-                className="mobile-edit-button"
-                onClick={(e) => e.currentTarget.closest(".map-panel")?.scrollTo({ top: 0 })}
-              >
-                Edit journey
-              </button>
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="text-lg font-medium">To {destination.name}</h2>
-                <span className="text-lg font-semibold">{minutes(best.seconds)}</span>
-              </div>
-              <p className="mt-1 text-base text-muted">
-                {kilometres(best.metres)} · Free-flow estimate
-              </p>
-              <button
-                type="button"
-                onClick={() =>
-                  navigate({
-                    to: "/trip",
-                    search: {
-                      from: useDevice ? "__device__" : from.name,
-                      to: destination.name,
-                      vehicle,
-                      option: selected,
-                    },
-                  })
-                }
-                className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
-              >
-                Start trip <ArrowRight size={18} className="ml-2" aria-hidden />
-              </button>
-            </section>
-
-            {result.routes.length > 1 && (
-              <section className="space-y-2">
-                <h2 className="text-base font-medium">Route options</h2>
-                {result.routes.map((r, i) => (
-                  <button
-                    type="button"
-                    key={i}
-                    onClick={() => setSelected(i)}
-                    aria-pressed={selected === i}
-                    className="alternative-route"
-                  >
-                    <span>
-                      {i === 0 ? "Suggested route" : `Alternative ${i}`}
-                      <small>{kilometres(r.metres)}</small>
-                    </span>
-                    <strong>{minutes(r.seconds)}</strong>
-                  </button>
-                ))}
-              </section>
-            )}
-          </>
-        )}
+        {!disrupted && routeBlock}
 
         {result && result.routes.length === 0 && (
           <section className="rounded-[6px] bg-surface p-4">
@@ -348,5 +439,21 @@ function Home() {
         <p className="planner-footnote">Estimates are not live traffic.</p>
       </div>
     </MapScreen>
+  );
+}
+
+function ClosureLine({ closure }: { closure: Closure }) {
+  const { icon: Icon, word } =
+    CLOSURE_KIND[closure.kind as keyof typeof CLOSURE_KIND] ?? CLOSURE_KIND.closure;
+  return (
+    <div>
+      <p className="flex items-start gap-2 text-base font-medium text-alert">
+        <Icon size={20} className="mt-0.5 shrink-0" aria-hidden />
+        {closure.reason}
+      </p>
+      <p className="text-base text-muted">
+        {word} until about {clock(closure.ends)}
+      </p>
+    </div>
   );
 }

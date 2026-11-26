@@ -11,8 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AfterTripRouteImport } from './routes/after-trip'
+import { Route as AlternativesRouteImport } from './routes/alternatives'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
-import { Route as ReAdviceRouteImport } from './routes/re-advice'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ReportRouteImport } from './routes/report'
 import { Route as TripRouteImport } from './routes/trip'
 import { Route as OperatorIndexRouteImport } from './routes/operator/index'
@@ -29,14 +30,19 @@ const AfterTripRoute = AfterTripRouteImport.update({
   path: '/after-trip',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AlternativesRoute = AlternativesRouteImport.update({
+  id: '/alternatives',
+  path: '/alternatives',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HowItWorksRoute = HowItWorksRouteImport.update({
   id: '/how-it-works',
   path: '/how-it-works',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReAdviceRoute = ReAdviceRouteImport.update({
-  id: '/re-advice',
-  path: '/re-advice',
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportRoute = ReportRouteImport.update({
@@ -68,8 +74,9 @@ const OperatorLiveRoute = OperatorLiveRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/after-trip': typeof AfterTripRoute
+  '/alternatives': typeof AlternativesRoute
   '/how-it-works': typeof HowItWorksRoute
-  '/re-advice': typeof ReAdviceRoute
+  '/onboarding': typeof OnboardingRoute
   '/report': typeof ReportRoute
   '/trip': typeof TripRoute
   '/operator/conditions': typeof OperatorConditionsRoute
@@ -79,8 +86,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/after-trip': typeof AfterTripRoute
+  '/alternatives': typeof AlternativesRoute
   '/how-it-works': typeof HowItWorksRoute
-  '/re-advice': typeof ReAdviceRoute
+  '/onboarding': typeof OnboardingRoute
   '/report': typeof ReportRoute
   '/trip': typeof TripRoute
   '/operator/conditions': typeof OperatorConditionsRoute
@@ -91,8 +99,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/after-trip': typeof AfterTripRoute
+  '/alternatives': typeof AlternativesRoute
   '/how-it-works': typeof HowItWorksRoute
-  '/re-advice': typeof ReAdviceRoute
+  '/onboarding': typeof OnboardingRoute
   '/report': typeof ReportRoute
   '/trip': typeof TripRoute
   '/operator/conditions': typeof OperatorConditionsRoute
@@ -104,8 +113,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/after-trip'
+    | '/alternatives'
     | '/how-it-works'
-    | '/re-advice'
+    | '/onboarding'
     | '/report'
     | '/trip'
     | '/operator/conditions'
@@ -115,8 +125,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/after-trip'
+    | '/alternatives'
     | '/how-it-works'
-    | '/re-advice'
+    | '/onboarding'
     | '/report'
     | '/trip'
     | '/operator/conditions'
@@ -126,8 +137,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/after-trip'
+    | '/alternatives'
     | '/how-it-works'
-    | '/re-advice'
+    | '/onboarding'
     | '/report'
     | '/trip'
     | '/operator/conditions'
@@ -138,8 +150,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AfterTripRoute: typeof AfterTripRoute
+  AlternativesRoute: typeof AlternativesRoute
   HowItWorksRoute: typeof HowItWorksRoute
-  ReAdviceRoute: typeof ReAdviceRoute
+  OnboardingRoute: typeof OnboardingRoute
   ReportRoute: typeof ReportRoute
   TripRoute: typeof TripRoute
   OperatorConditionsRoute: typeof OperatorConditionsRoute
@@ -163,6 +176,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AfterTripRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/alternatives': {
+      id: '/alternatives'
+      path: '/alternatives'
+      fullPath: '/alternatives'
+      preLoaderRoute: typeof AlternativesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/how-it-works': {
       id: '/how-it-works'
       path: '/how-it-works'
@@ -170,11 +190,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HowItWorksRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/re-advice': {
-      id: '/re-advice'
-      path: '/re-advice'
-      fullPath: '/re-advice'
-      preLoaderRoute: typeof ReAdviceRouteImport
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report': {
@@ -218,8 +238,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AfterTripRoute: AfterTripRoute,
+  AlternativesRoute: AlternativesRoute,
   HowItWorksRoute: HowItWorksRoute,
-  ReAdviceRoute: ReAdviceRoute,
+  OnboardingRoute: OnboardingRoute,
   ReportRoute: ReportRoute,
   TripRoute: TripRoute,
   OperatorConditionsRoute: OperatorConditionsRoute,
