@@ -5,7 +5,7 @@
 ```
 mod-app/
 ├── pyproject.toml              backend deps, managed with uv
-├── docker-compose.yml          api + postgres
+├── docker-compose.yml          the API in a container
 ├── .env.example
 │
 ├── data/
@@ -15,26 +15,23 @@ mod-app/
 │   ├── main.py                 FastAPI app and endpoints
 │   ├── graph.py                load the graph into memory at startup
 │   ├── routing.py              Dijkstra, k alternatives, vehicle class
-│   ├── closures.py             what is shut now, as an exclusion set
+│   ├── store.py                SQLite: closures, reports, answers, assignments, speeds
+│   ├── probes.py               position pings to speed per edge
+│   ├── places.py               Baato place search proxy
 │   └── models.py               request and response shapes
 │
 ├── web/
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── src/
-│       ├── traveller/          onboarding, home, disrupted, trip, re-advice
-│       ├── console/            operator: post disruption, live view
-│       ├── lib/                api client, shared state
-│       └── styles/tokens.css   the locked palette, one file
+│       ├── routes/             traveller screens; operator/ holds the console
+│       ├── components/mod/     the screens' shared pieces, map included
+│       ├── lib/                api client, places, device storage
+│       └── styles.css          the locked palette, one file
 │
 ├── Dockerfile
 └── tests/
 ```
-
-Later phases add `api/probes.py`, `api/sessions.py`, `api/assignment.py` and a
-database schema. **Do not create those files before their phase.** An empty
-module invites speculative structure, and the shape of the probe pipeline
-depends on what Phase 2 actually measures.
 
 ## Decisions
 
@@ -48,7 +45,7 @@ already Python.
 
 ### One frontend build, two route trees
 
-`web/src/traveller/` and `web/src/console/` live in one Vite app, not two
+The traveller routes and `web/src/routes/operator/` live in one Vite app, not two
 projects. They share the design tokens, the API client and the build. The
 console is desktop-first and the traveller app is mobile-first, but that is a
 layout difference, not a codebase difference. Split only if a team appears.
