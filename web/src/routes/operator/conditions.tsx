@@ -37,7 +37,7 @@ function Conditions() {
 
   useEffect(() => {
     const load = () =>
-      getReports()
+      getReports(localStorage.getItem("mod.operator.token") ?? "")
         .then(setReports)
         .catch(() => setFailed(true));
     load();
@@ -59,7 +59,12 @@ function Conditions() {
         console does not decide what to act on.
       </p>
 
-      {failed && <p className="text-base text-alert">The service did not answer.</p>}
+      {failed && (
+        <p className="text-base text-muted">
+          Could not load reports. Check the operator token on Post a disruption, and that the
+          service is running.
+        </p>
+      )}
 
       {reports && reports.length === 0 && (
         <p className="text-base text-muted">Nothing reported in the last two hours.</p>

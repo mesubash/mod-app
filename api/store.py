@@ -50,9 +50,8 @@ CREATE TABLE IF NOT EXISTS trip_answers (
     took_suggested TEXT   NOT NULL,     -- yes | no | partly
     already_knew   TEXT   NOT NULL,     -- yes | no
     created        REAL   NOT NULL,
-    -- The diverted trip this answers, when it was one: origin/destination
-    -- node ids and vehicle, plus which alternative was taken. Nothing about
-    -- the person.
+    -- The trip this answers: origin/destination node ids and vehicle, plus
+    -- which of its routes was taken. Nothing about the person.
     spread_key     TEXT,
     alt_index      INTEGER
 );
@@ -231,12 +230,16 @@ def spread_split(db, within_minutes: int = 120) -> list[dict]:
         (since,),
     ):
         cell(r["key"], r["alt_index"])[0] = r["n"]
+    # Answers from trips no closure touched carry a key too; only keys with a
+    # diverted traveller in the window belong in the split.
     for r in db.execute(
         "SELECT spread_key, alt_index, COUNT(*) AS n,"
         " SUM(took_suggested = 'yes') AS took FROM trip_answers"
         " WHERE created >= ? AND spread_key IS NOT NULL GROUP BY spread_key, alt_index",
         (since,),
     ):
+        if r["spread_key"] not in by_key:
+            continue
         c = cell(r["spread_key"], r["alt_index"])
         c[1], c[2] = r["n"], r["took"]
     out = []

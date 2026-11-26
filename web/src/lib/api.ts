@@ -132,7 +132,11 @@ export type Flow = { edge: string; window_minutes: number; measured_kmh: number 
 
 export const getFlow = (edge: string) => json<Flow>(`/flow?edge=${encodeURIComponent(edge)}`);
 
-export const getSpread = () => json<SpreadResponse>("/spread");
+// Operator only: a split with a count of one describes one traveller's trip.
+export const getSpread = (token: string) =>
+  json<SpreadResponse>("/spread", {
+    headers: { "content-type": "application/json", "x-operator-token": token },
+  });
 
 export type PlaceResult = { name: string; lon: number; lat: number };
 export type PlaceSearchResponse = { results: PlaceResult[]; configured: boolean };
@@ -148,7 +152,11 @@ export const postAssignment = (spread_key: string, index: number) =>
     body: JSON.stringify({ spread_key, index }),
   });
 
-export const getReports = () => json<Report[]>("/reports");
+// Operator only: a report is an exact position and a time.
+export const getReports = (token: string) =>
+  json<Report[]>("/reports", {
+    headers: { "content-type": "application/json", "x-operator-token": token },
+  });
 
 export const postReport = (kind: Report["kind"], at: Point) =>
   json<Report>("/reports", { method: "POST", body: JSON.stringify({ kind, at }) });

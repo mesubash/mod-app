@@ -7,10 +7,18 @@ services:
     # The VPS runs other services that matter more and has about 3 GB free.
     # The API sits near 100 MB; this stops a leak here from starving them.
     mem_limit: 512m
-    # Compose reads a top-level .env for these automatically if one exists;
-    # ${VAR:-} defaults to empty so `docker compose up` works with none of
-    # them set at all, same as running the API directly with a bare shell.
+    # Compose reads a top-level .env for these automatically if one exists.
+    # MOD_CORS_ORIGINS falls back to the local web dev server only when unset
+    # (no colon in the default), so setting it to empty still allows none.
+    # The database lives on a named volume so closures, reports and answers
+    # survive the container being recreated; the graph stays in the image.
+    volumes:
+      - mod-data:/var/lib/mod
     environment:
-      MOD_CORS_ORIGINS: ${MOD_CORS_ORIGINS:-}
+      MOD_DB: /var/lib/mod/mod.db
+      MOD_CORS_ORIGINS: ${MOD_CORS_ORIGINS-http://localhost:3000,http://127.0.0.1:3000}
       MOD_OPERATOR_TOKEN: ${MOD_OPERATOR_TOKEN:-}
       BAATO_API_KEY: ${BAATO_API_KEY:-}
+
+volumes:
+  mod-data:

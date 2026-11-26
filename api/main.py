@@ -223,7 +223,7 @@ def clear_closure(closure_id: int) -> dict[str, bool]:
     return {"cleared": True}
 
 
-@app.get("/reports")
+@app.get("/reports", dependencies=[Depends(operator)])
 def list_reports() -> list[Report]:
     return [Report(**r) for r in store.recent_reports(DB)]
 
@@ -351,13 +351,13 @@ def flow(edge: str, minutes: int = 15) -> dict[str, object]:
     }
 
 
-@app.get("/spread")
+@app.get("/spread", dependencies=[Depends(operator)])
 def spread(minutes: int = 120) -> SpreadResponse:
     """How affected travellers have actually split across alternatives.
 
     Real counts over a window: who accepted each alternative, and how many of
     them later said they took it. Not a claim that the assignment must be
-    even. Each split carries its two ends as coordinates, since the graph has
+    even. Operator only: a count of one describes one traveller's trip. Each split carries its two ends as coordinates, since the graph has
     no place names and the console labels them itself.
     """
     return SpreadResponse(

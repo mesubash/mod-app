@@ -87,7 +87,7 @@ class Report(BaseModel):
 class TripAnswerRequest(BaseModel):
     took_suggested: Literal["yes", "no", "partly"]
     already_knew: Literal["yes", "no"]
-    # Set when the trip was a diverted one, from the /route response.
+    # The trip's origin:destination:vehicle key and the route index taken.
     spread_key: str | None = Field(default=None, max_length=200)
     index: int | None = Field(default=None, ge=0, le=4)
 

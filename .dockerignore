@@ -1,0 +1,10 @@
+# The image needs the API code, the lockfile and the road graph. Never a
+# local database: it would ship whatever reports and answers were on the
+# build machine.
+data/*.db
+data/*.db-*
+.env
+.venv/
+web/
+tests/
+reviews/

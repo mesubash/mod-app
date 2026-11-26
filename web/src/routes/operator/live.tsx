@@ -39,6 +39,7 @@ function LiveView() {
   const [failed, setFailed] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [splits, setSplits] = useState<SpreadSplit[]>([]);
+  const [splitDenied, setSplitDenied] = useState(false);
   const [spreadWindowMinutes, setSpreadWindowMinutes] = useState(120);
 
   const refresh = () => {
@@ -48,12 +49,16 @@ function LiveView() {
         setFailed(false);
       })
       .catch(() => setFailed(true));
-    getSpread()
+    getSpread(localStorage.getItem(TOKEN_KEY) ?? "")
       .then((r) => {
         setSplits(r.splits);
         setSpreadWindowMinutes(r.window_minutes);
+        setSplitDenied(false);
       })
-      .catch(() => setSplits([]));
+      .catch(() => {
+        setSplits([]);
+        setSplitDenied(true);
+      });
   };
 
   useEffect(() => {
@@ -107,7 +112,11 @@ function LiveView() {
       <section className="mt-8 max-w-[52rem] space-y-3">
         <h2 className="text-lg font-medium">How assignments have split</h2>
 
-        {splits.length === 0 ? (
+        {splitDenied ? (
+          <p className="text-base text-muted">
+            Enter the operator token on Post a disruption to see how travellers have split.
+          </p>
+        ) : splits.length === 0 ? (
           <p className="text-base text-muted">
             No affected travellers in the last {spreadWindowMinutes} minutes.
           </p>

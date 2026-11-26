@@ -76,9 +76,9 @@ function Trip() {
   const [from, setFrom] = useState(PLACES.find((p) => p.name === search.from) ?? PLACES[2]!);
   const [useDevice, setUseDevice] = useState(search.from === "__device__");
   const [route, setRoute] = useState<RouteOption | null>(null);
-  // Carried to the after-trip questions so the answer counts against the
-  // diverted route it is about.
-  const [spreadKey, setSpreadKey] = useState<string | null>(null);
+  // Carried to the after-trip questions so the answer is recorded against
+  // this trip and the route taken. Junction ids and vehicle only.
+  const [tripKey, setTripKey] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [failed, setFailed] = useState(false);
 
@@ -94,7 +94,7 @@ function Trip() {
       .then((r) => {
         if (cancelled) return;
         const next = r.routes[search.option] ?? r.routes[0];
-        setSpreadKey(r.spread_key);
+        setTripKey(r.spread_key ?? `${r.origin_node}:${r.destination_node}:${vehicle}`);
         if (next) setRoute(next);
         else setFailed(true);
       })
@@ -394,7 +394,7 @@ function Trip() {
           </Link>
           <Link
             to="/after-trip"
-            search={spreadKey ? { key: spreadKey, option: search.option } : {}}
+            search={tripKey ? { key: tripKey, option: search.option } : {}}
             onClick={() => setRunning(false)}
             className="inline-flex min-h-11 items-center gap-2 rounded-[6px] bg-foreground px-4 text-base font-medium text-inverse"
           >

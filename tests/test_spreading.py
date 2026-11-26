@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 TRIPURESHWOR = {"lon": 85.3140, "lat": 27.6929}
 KOTESHWOR = {"lon": 85.3495, "lat": 27.6785}
 TOKEN = "test-token"
+OP = {"x-operator-token": TOKEN}
 
 
 @pytest.fixture(scope="module")
@@ -102,11 +103,11 @@ def test_affected_travellers_are_spread_only_as_they_accept(client):
 def test_the_operator_split_view_counts_acceptances_not_requests(client):
     body = route(client)
     key = body["spread_key"]
-    before = sum(next(s["counts"] for s in client.get("/spread").json()["splits"] if s["key"] == key))
+    before = sum(next(s["counts"] for s in client.get("/spread", headers=OP).json()["splits"] if s["key"] == key))
     for _ in range(3):
         route(client)
     accept(client, body)
-    after = sum(next(s["counts"] for s in client.get("/spread").json()["splits"] if s["key"] == key))
+    after = sum(next(s["counts"] for s in client.get("/spread", headers=OP).json()["splits"] if s["key"] == key))
     assert after == before + 1
 
 
@@ -129,7 +130,7 @@ def test_an_answer_counts_against_the_route_it_was_about(client):
         },
     )
     assert r.status_code == 200
-    split = next(s for s in client.get("/spread").json()["splits"] if s["key"] == body["spread_key"])
+    split = next(s for s in client.get("/spread", headers=OP).json()["splits"] if s["key"] == body["spread_key"])
     assert split["answered"][i] == 1 and split["took"][i] == 1
     assert split["vehicle"] == "car" and split["origin"]["lon"] > 85
 
@@ -141,4 +142,29 @@ def test_a_made_up_trip_key_is_refused(client):
         r = client.post("/assignments", json={"spread_key": key, "index": 0})
         assert r.status_code == 422
     # The operator view still loads after the attempts.
-    assert client.get("/spread").status_code == 200
+    assert client.get("/spread", headers=OP).status_code == 200
+
+
+def test_an_undiverted_trip_answer_is_kept_but_not_counted_as_spreading(client):
+    import api.main
+
+    kalimati, shahid_gate = {"lon": 85.297, "lat": 27.699}, {"lon": 85.313, "lat": 27.696}
+    plain = client.post(
+        "/route", json={"origin": kalimati, "destination": shahid_gate, "vehicle": "bus"}
+    ).json()
+    assert plain["spread_key"] is None
+    key = f"{plain['origin_node']}:{plain['destination_node']}:bus"
+    r = client.post(
+        "/trip-answers",
+        json={"took_suggested": "yes", "already_knew": "yes", "spread_key": key, "index": 0},
+    )
+    assert r.status_code == 200
+    stored = api.main.DB.execute(
+        "SELECT COUNT(*) FROM trip_answers WHERE spread_key = ?", (key,)
+    ).fetchone()[0]
+    assert stored == 1
+    assert key not in {s["key"] for s in client.get("/spread", headers=OP).json()["splits"]}
+
+
+def test_the_split_is_for_operators_only(client):
+    assert client.get("/spread").status_code == 401

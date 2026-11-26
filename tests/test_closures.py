@@ -84,7 +84,7 @@ def test_reports_are_open_and_come_back_newest_first(client):
     for kind in ("jam", "flood"):
         r = client.post("/reports", json={"kind": kind, "at": TRIPURESHWOR})
         assert r.status_code == 200
-    kinds = [r["kind"] for r in client.get("/reports").json()]
+    kinds = [r["kind"] for r in client.get("/reports", headers={"x-operator-token": TOKEN}).json()]
     assert kinds[:2] == ["flood", "jam"]
 
 
@@ -119,3 +119,8 @@ def test_the_browser_may_send_the_operator_token_and_clear_a_closure(client):
         },
     )
     assert r.status_code == 200
+
+
+def test_reports_are_read_by_operators_only(client):
+    # A report is an exact position and a time.
+    assert client.get("/reports").status_code == 401

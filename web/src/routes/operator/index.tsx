@@ -159,11 +159,11 @@ function Operator() {
 
           <p className="text-base" role="status">
             {flow === null
-              ? "Checking current flow on this link…"
+              ? "Checking current speed on this link…"
               : flow === "failed"
-                ? "Could not read current flow on this link."
+                ? "Could not read current speed on this link."
                 : flow.measured_kmh === null
-                  ? `Current flow unknown: no traveller has crossed this link in the last ${flow.window_minutes} minutes.`
+                  ? `Current speed unknown: no traveller has crossed this link in the last ${flow.window_minutes} minutes.`
                   : `Moving at about ${flow.measured_kmh} km/h over the last ${flow.window_minutes} minutes.`}
           </p>
           <div className="flex flex-wrap gap-3">
@@ -205,7 +205,10 @@ function Operator() {
             <input
               type="password"
               value={token}
-              onChange={(e) => setToken(e.target.value)}
+              onChange={(e) => {
+                setToken(e.target.value);
+                localStorage.setItem(TOKEN_KEY, e.target.value);
+              }}
               className="mt-1 block min-h-11 w-full rounded-[6px] border border-border bg-background px-3 text-base"
             />
           </label>
