@@ -40,6 +40,19 @@ class RouteResponse(BaseModel):
     routes: list[RouteOption]
     origin_node: str
     destination_node: str
+    # Set only when an active closure sits on this trip's usual quickest path.
+    usual_seconds: float | None = None
+    # Index into routes of the alternative this traveller is advised to take.
+    assigned: int = 0
+    # Present only for a diverted trip; sent back with POST /assignments.
+    spread_key: str | None = None
+    # Accepted assignments per route over the last two hours, same order.
+    recent_assignments: list[int] | None = None
+
+
+class AssignmentRequest(BaseModel):
+    spread_key: str = Field(min_length=3, max_length=200)
+    index: int = Field(ge=0, le=4)
 
 
 class ClosureRequest(BaseModel):
@@ -74,6 +87,9 @@ class Report(BaseModel):
 class TripAnswerRequest(BaseModel):
     took_suggested: Literal["yes", "no", "partly"]
     already_knew: Literal["yes", "no"]
+    # Set when the trip was a diverted one, from the /route response.
+    spread_key: str | None = Field(default=None, max_length=200)
+    index: int | None = Field(default=None, ge=0, le=4)
 
 
 class PingIn(BaseModel):
@@ -104,6 +120,11 @@ class Coverage(BaseModel):
 class SpreadSplit(BaseModel):
     key: str
     counts: list[int]
+    answered: list[int]
+    took: list[int]
+    origin: Point
+    destination: Point
+    vehicle: str
 
 
 class SpreadResponse(BaseModel):

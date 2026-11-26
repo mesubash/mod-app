@@ -49,20 +49,17 @@ CREATE TABLE IF NOT EXISTS trip_answers (
     id            INTEGER PRIMARY KEY,
     took_suggested TEXT   NOT NULL,     -- yes | no | partly
     already_knew   TEXT   NOT NULL,     -- yes | no
-    created        REAL   NOT NULL
+    created        REAL   NOT NULL,
+    -- The diverted trip this answers, when it was one: origin/destination
+    -- node ids and vehicle, plus which alternative was taken. Nothing about
+    -- the person.
+    spread_key     TEXT,
+    alt_index      INTEGER
 );
 
--- Round-robin position for which alternative route gets recommended next,
--- per origin/destination/vehicle. See api/main.py's /route handler for what
--- this is (an engineering default) and what it is not (a simulated result).
-CREATE TABLE IF NOT EXISTS spread_counters (
-    key     TEXT    PRIMARY KEY,
-    counter INTEGER NOT NULL
-);
-
--- One row per affected traveller actually rotated onto an alternative.
+-- One row per affected traveller who accepted an assigned alternative.
 -- Append-only so the operator console can show a real, decaying-by-window
--- split instead of "trust us, it's round robin" -- see docs/phases.md,
+-- split instead of "trust us, it's balanced" -- see docs/phases.md,
 -- Phase 6: "Done when ... the operator console shows the split."
 CREATE TABLE IF NOT EXISTS spread_selections (
     id        INTEGER PRIMARY KEY,
@@ -80,6 +77,11 @@ def connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH, check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    # Databases made before answers were tied to a trip lack the two columns.
+    have = {r["name"] for r in db.execute("PRAGMA table_info(trip_answers)")}
+    for column, kind in (("spread_key", "TEXT"), ("alt_index", "INTEGER")):
+        if column not in have:
+            db.execute(f"ALTER TABLE trip_answers ADD COLUMN {column} {kind}")
     return db
 
 
@@ -128,10 +130,18 @@ def recent_reports(db, within_minutes: int = 120) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def add_trip_answer(db, took_suggested: str, already_knew: str) -> int:
+def add_trip_answer(
+    db,
+    took_suggested: str,
+    already_knew: str,
+    spread_key: str | None = None,
+    alt_index: int | None = None,
+) -> int:
     cur = db.execute(
-        "INSERT INTO trip_answers (took_suggested, already_knew, created) VALUES (?, ?, ?)",
-        (took_suggested, already_knew, time.time()),
+        "INSERT INTO trip_answers"
+        " (took_suggested, already_knew, created, spread_key, alt_index)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (took_suggested, already_knew, time.time(), spread_key, alt_index),
     )
     db.commit()
     return cur.lastrowid
@@ -181,21 +191,19 @@ def edge_speed_coverage(db, within_minutes: int = 15) -> dict:
     }
 
 
-def next_spread_index(db, key: str, options: int) -> int:
-    """The next index to lead the alternatives list for this key, cycling
-    through `options` round-robin. Advances every call, so two travellers
-    who ask a moment apart get different answers."""
-    if options <= 1:
-        return 0
-    row = db.execute("SELECT counter FROM spread_counters WHERE key = ?", (key,)).fetchone()
-    counter = row["counter"] if row else 0
-    db.execute(
-        "INSERT INTO spread_counters (key, counter) VALUES (?, ?)"
-        " ON CONFLICT(key) DO UPDATE SET counter = excluded.counter",
-        (key, counter + 1),
-    )
-    db.commit()
-    return counter % options
+def recent_assignments(db, key: str, options: int, within_minutes: int = 120) -> list[int]:
+    """How many travellers accepted each of `options` alternatives for this
+    origin/destination/vehicle over the window."""
+    since = time.time() - within_minutes * 60
+    counts = [0] * options
+    for r in db.execute(
+        "SELECT alt_index, COUNT(*) AS n FROM spread_selections"
+        " WHERE key = ? AND at >= ? GROUP BY alt_index",
+        (key, since),
+    ):
+        if r["alt_index"] < options:
+            counts[r["alt_index"]] = r["n"]
+    return counts
 
 
 def record_spread_selection(db, key: str, alt_index: int) -> None:
@@ -207,22 +215,42 @@ def record_spread_selection(db, key: str, alt_index: int) -> None:
 
 
 def spread_split(db, within_minutes: int = 120) -> list[dict]:
-    """How affected travellers' leading alternative has actually split,
-    per origin/destination/vehicle, over the window. Real counts, not a
-    claim that round robin must be even -- an operator can see if it is."""
+    """Per origin/destination/vehicle over the window: how many affected
+    travellers accepted each alternative, and of those who answered the
+    after-trip question, how many say they took it. Real counts, not a claim
+    that the assignment must be even -- an operator can see if it is."""
     since = time.time() - within_minutes * 60
-    rows = db.execute(
+    by_key: dict[str, dict[int, list[int]]] = {}
+
+    def cell(key: str, i: int) -> list[int]:
+        return by_key.setdefault(key, {}).setdefault(i, [0, 0, 0])
+
+    for r in db.execute(
         "SELECT key, alt_index, COUNT(*) AS n FROM spread_selections"
-        " WHERE at >= ? GROUP BY key, alt_index ORDER BY key, alt_index",
+        " WHERE at >= ? GROUP BY key, alt_index",
         (since,),
-    ).fetchall()
-    by_key: dict[str, dict[int, int]] = {}
-    for r in rows:
-        by_key.setdefault(r["key"], {})[r["alt_index"]] = r["n"]
-    return [
-        {"key": key, "counts": [counts.get(i, 0) for i in range(max(counts) + 1)]}
-        for key, counts in by_key.items()
-    ]
+    ):
+        cell(r["key"], r["alt_index"])[0] = r["n"]
+    for r in db.execute(
+        "SELECT spread_key, alt_index, COUNT(*) AS n,"
+        " SUM(took_suggested = 'yes') AS took FROM trip_answers"
+        " WHERE created >= ? AND spread_key IS NOT NULL GROUP BY spread_key, alt_index",
+        (since,),
+    ):
+        c = cell(r["spread_key"], r["alt_index"])
+        c[1], c[2] = r["n"], r["took"]
+    out = []
+    for key, cells in sorted(by_key.items()):
+        width = range(max(cells) + 1)
+        out.append(
+            {
+                "key": key,
+                "counts": [cells.get(i, [0, 0, 0])[0] for i in width],
+                "answered": [cells.get(i, [0, 0, 0])[1] for i in width],
+                "took": [cells.get(i, [0, 0, 0])[2] for i in width],
+            }
+        )
+    return out
 
 
 def median_speeds(db, within_minutes: int = 15) -> dict[str, float]:

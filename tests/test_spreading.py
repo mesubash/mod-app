@@ -1,4 +1,4 @@
-"""Which alternative leads the list, once a closure could plausibly affect
+"""Which alternative a traveller is assigned, once a closure could plausibly affect
 this trip. This is MOD's own engineering default -- see docs/product.md,
 "What the research does not support (yet)" -- not a simulated result, so
 these tests are about the mechanism doing what it claims, not about it
@@ -51,13 +51,13 @@ def close(client, edge):
     return r.json()["id"]
 
 
-def test_with_no_active_closure_the_same_route_leads_every_time(client):
-    a = route(client)["routes"][0]["edges"]
-    b = route(client)["routes"][0]["edges"]
-    assert a == b
+def test_with_no_active_closure_the_quickest_route_is_assigned(client):
+    body = route(client)
+    assert body["assigned"] == 0
+    assert body["spread_key"] is None
 
 
-def test_an_unaffected_travellers_suggestion_does_not_rotate(client):
+def test_an_unaffected_traveller_is_not_spread(client):
     # Close something nowhere near this corridor pair's own quickest route.
     before = route(client)["routes"][0]["edges"]
     close(client, "1132401300#0")
@@ -69,50 +69,76 @@ def test_an_unaffected_travellers_suggestion_does_not_rotate(client):
         assert after == before
 
 
-def test_an_affected_travellers_suggestion_rotates_round_robin(client):
+def accept(client, body):
+    r = client.post(
+        "/assignments", json={"spread_key": body["spread_key"], "index": body["assigned"]}
+    )
+    assert r.status_code == 200
+
+
+def test_affected_travellers_are_spread_only_as_they_accept(client):
     baseline = route(client)["routes"]
     assert len(baseline) > 1
-    primary_edges = baseline[0]["edges"]
-    shut_edge = primary_edges[len(primary_edges) // 2]
+    shut_edge = baseline[0]["edges"][len(baseline[0]["edges"]) // 2]
     close(client, shut_edge)
 
-    seen = [route(client)["routes"][0]["edges"] for _ in range(4)]
-    # Round-robin over however many alternatives exist: not everyone gets
-    # the same leading route.
-    assert len(set(tuple(r) for r in seen)) > 1
-    # None of them can contain the edge that's now shut.
-    for edges in seen:
-        assert shut_edge not in edges
+    first = route(client)
+    assert first["spread_key"] and first["usual_seconds"]
+    # Asking again without accepting changes nothing: page loads and mid-trip
+    # re-checks are not travellers.
+    assert route(client)["assigned"] == first["assigned"]
+
+    accept(client, first)
+    second = route(client)
+    assert second["assigned"] != first["assigned"]
+    accept(client, second)
+
+    for body in (first, second):
+        assert shut_edge not in body["routes"][body["assigned"]]["edges"]
+    counts = route(client)["recent_assignments"]
+    assert sum(counts) == 2 and max(counts) == 1
 
 
-def test_the_operator_split_view_reflects_real_selections(client):
-    baseline = route(client)["routes"]
-    primary_edges = baseline[0]["edges"]
-    shut_edge = primary_edges[len(primary_edges) // 2]
-    close(client, shut_edge)
-
-    for _ in range(4):
+def test_the_operator_split_view_counts_acceptances_not_requests(client):
+    body = route(client)
+    key = body["spread_key"]
+    before = sum(next(s["counts"] for s in client.get("/spread").json()["splits"] if s["key"] == key))
+    for _ in range(3):
         route(client)
-
-    body = client.get("/spread").json()
-    matching = [s for s in body["splits"] if s["counts"] and sum(s["counts"]) >= 4]
-    assert matching, body
-    assert sum(matching[0]["counts"]) >= 4
-    assert len(matching[0]["counts"]) > 1
+    accept(client, body)
+    after = sum(next(s["counts"] for s in client.get("/spread").json()["splits"] if s["key"] == key))
+    assert after == before + 1
 
 
-def test_each_key_has_its_own_independent_counter(tmp_path):
-    # Regression guard at the storage layer: the round-robin key must
-    # include origin/destination/vehicle, or two unrelated trips would
-    # perturb each other's rotation.
-    import api.store as store_module
+def test_an_assignment_index_out_of_range_is_rejected(client):
+    r = client.post("/assignments", json={"spread_key": "a:b:car", "index": 9})
+    assert r.status_code == 422
 
-    store_module.DB_PATH = tmp_path / "spread.db"
-    db = store_module.connect()
 
-    a_first = store_module.next_spread_index(db, "A", 3)
-    b_first = store_module.next_spread_index(db, "B", 3)
-    a_second = store_module.next_spread_index(db, "A", 3)
+def test_an_answer_counts_against_the_route_it_was_about(client):
+    body = route(client)
+    i = body["assigned"]
+    accept(client, body)
+    r = client.post(
+        "/trip-answers",
+        json={
+            "took_suggested": "yes",
+            "already_knew": "no",
+            "spread_key": body["spread_key"],
+            "index": i,
+        },
+    )
+    assert r.status_code == 200
+    split = next(s for s in client.get("/spread").json()["splits"] if s["key"] == body["spread_key"])
+    assert split["answered"][i] == 1 and split["took"][i] == 1
+    assert split["vehicle"] == "car" and split["origin"]["lon"] > 85
 
-    assert (a_first, b_first) == (0, 0)
-    assert a_second == 1
+
+def test_a_made_up_trip_key_is_refused(client):
+    body = route(client)
+    real_ends = f"{body['origin_node']}:{body['destination_node']}"
+    for key in ("a:b:car", "x", f"{real_ends}:hovercraft"):
+        r = client.post("/assignments", json={"spread_key": key, "index": 0})
+        assert r.status_code == 422
+    # The operator view still loads after the attempts.
+    assert client.get("/spread").status_code == 200

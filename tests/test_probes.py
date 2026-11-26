@@ -63,3 +63,25 @@ def test_pings_are_ordered_before_matching():
     seconds = metres / 8.0
     shuffled = [Ping(head[0], head[1], 1000.0 + seconds), Ping(tail[0], tail[1], 1000.0)]
     assert len(match(GRAPH, shuffled)) == 1
+
+
+def test_flow_on_a_link_is_unknown_until_measured(tmp_path, monkeypatch):
+    import importlib
+    import time
+
+    from api.probes import Observation
+
+    monkeypatch.setenv("MOD_DB", str(tmp_path / "flow.db"))
+    import api.main
+    import api.store
+
+    importlib.reload(api.store)
+    importlib.reload(api.main)
+    from fastapi.testclient import TestClient
+
+    with TestClient(api.main.app) as c:
+        edge = next(iter(api.main.GRAPH.edge_nodes))
+        assert c.get("/flow", params={"edge": edge}).json()["measured_kmh"] is None
+        api.store.add_speeds(api.main.DB, [Observation(edge, 5.0, time.time())])
+        assert c.get("/flow", params={"edge": edge}).json()["measured_kmh"] == 18.0
+        assert c.get("/flow", params={"edge": "not-an-edge"}).status_code == 404

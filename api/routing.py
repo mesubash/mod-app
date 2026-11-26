@@ -1,9 +1,9 @@
 """Shortest path and distinct alternatives, per vehicle class.
 
 This module only finds routes; it has no opinion on which one a given
-traveller should be told about first. That policy (currently: round-robin
-across the k returned here, for travellers a closure actually affects) lives
-in api/main.py's /route handler, next to the store it needs to keep count.
+traveller should be told about first. That policy (currently: the least
+recently accepted of the k returned here, for travellers a closure actually
+affects) lives in api/main.py's /route handler, next to the store it counts in.
 See docs/product.md, "What the research does not support (yet)," for why
 that policy is an engineering default and not a cited result.
 """

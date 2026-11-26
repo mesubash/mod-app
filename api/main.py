@@ -11,6 +11,8 @@ from api import places as places_module
 from api import probes, store
 from api.models import (
     VEHICLES,
+    AssignmentRequest,
+    Point,
     Closure,
     ClosureRequest,
     PlaceSearchResponse,
@@ -77,8 +79,11 @@ if CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=CORS_ORIGINS,
-        allow_methods=["GET", "POST"],
-        allow_headers=["content-type"],
+        # DELETE and the token header are what the operator console's
+        # "Clear disruption" and "Publish" send; without them the browser's
+        # preflight refuses both before the token is ever checked.
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["content-type", "x-operator-token"],
     )
 
 
@@ -113,21 +118,21 @@ def route(request: RouteRequest) -> RouteResponse:
         k=request.alternatives,
     )
 
-    # Spreading: rotate which alternative leads the list so travellers on the
-    # same origin/destination/vehicle are not all told the same "suggested"
-    # route. Only when this trip's own quickest path would actually have used
-    # a shut edge -- a traveller whose route was never going to touch the
-    # closure has nothing to spread. This is MOD's own engineering default,
-    # not a simulated result: see docs/product.md, "What the research does
-    # not support (yet)" for why it isn't cited to the study.
-    if shut and len(found) > 1:
-        unconstrained = shortest(GRAPH, origin, destination, VEHICLES[request.vehicle])
-        affected = unconstrained is not None and any(e in shut for e in unconstrained.edges)
-        if affected:
-            key = f"{origin}:{destination}:{request.vehicle}"
-            i = store.next_spread_index(DB, key, len(found))
-            found = found[i:] + found[:i]
-            store.record_spread_selection(DB, key, i)
+    # Spreading: a traveller whose usual quickest path runs through a shut
+    # edge is assigned whichever alternative the fewest affected travellers
+    # on the same trip have accepted recently, ties going to the quicker
+    # one. Nothing is counted until the traveller accepts (POST
+    # /assignments), so reloading a screen or re-checking mid-trip does not
+    # inflate the split the operator sees. This is MOD's own engineering
+    # default, not a simulated result: see docs/product.md, "What the
+    # research does not support (yet)" for why it isn't cited to the study.
+    unconstrained = (
+        shortest(GRAPH, origin, destination, VEHICLES[request.vehicle]) if shut else None
+    )
+    affected = unconstrained is not None and any(e in shut for e in unconstrained.edges)
+    key = f"{origin}:{destination}:{request.vehicle}" if affected and found else None
+    counts = store.recent_assignments(DB, key, len(found)) if key else None
+    assigned = counts.index(min(counts)) if counts else 0
 
     return RouteResponse(
         routes=[
@@ -141,6 +146,37 @@ def route(request: RouteRequest) -> RouteResponse:
         ],
         origin_node=origin,
         destination_node=destination,
+        # What the trip costs with nothing shut, so the app can say "about 6
+        # minutes longer than usual" instead of hiding the price of the detour.
+        usual_seconds=round(unconstrained.seconds, 1) if affected else None,
+        assigned=assigned,
+        spread_key=key,
+        recent_assignments=counts,
+    )
+
+
+def _check_key(key: str) -> None:
+    """These endpoints are open, so a key must name real junctions and a real
+    vehicle class, or the operator's split view would carry whatever was sent."""
+    parts = key.split(":")
+    if (
+        len(parts) != 3
+        or parts[0] not in GRAPH.nodes
+        or parts[1] not in GRAPH.nodes
+        or parts[2] not in VEHICLES
+    ):
+        raise HTTPException(status_code=422, detail="unknown trip key")
+
+
+def _labelled(split: dict) -> SpreadSplit:
+    """A split with its two ends as coordinates, so the console can name them."""
+    origin, destination, vehicle = split["key"].split(":")
+    (olon, olat), (dlon, dlat) = GRAPH.nodes[origin], GRAPH.nodes[destination]
+    return SpreadSplit(
+        **split,
+        origin=Point(lon=olon, lat=olat),
+        destination=Point(lon=dlon, lat=dlat),
+        vehicle=vehicle,
     )
 
 
@@ -218,8 +254,26 @@ def post_trip_answer(request: TripAnswerRequest) -> dict[str, int]:
     guidance is worth anything on this corridor. Nothing identifying the
     traveller is stored with it.
     """
-    answer_id = store.add_trip_answer(DB, request.took_suggested, request.already_knew)
+    if request.spread_key is not None:
+        _check_key(request.spread_key)
+    answer_id = store.add_trip_answer(
+        DB, request.took_suggested, request.already_knew, request.spread_key, request.index
+    )
     return {"id": answer_id}
+
+
+@app.post("/assignments")
+def accept_assignment(request: AssignmentRequest) -> dict[str, bool]:
+    """A diverted traveller accepting one of the alternatives they were shown.
+
+    Counted on acceptance rather than when routes are fetched, so the split
+    is travellers, not page loads. Unauthenticated for the same reason as
+    reports; the key carries graph node ids and a vehicle class, nothing
+    about the person.
+    """
+    _check_key(request.spread_key)
+    store.record_spread_selection(DB, request.spread_key, request.index)
+    return {"recorded": True}
 
 
 @app.get("/trip-answers/summary")
@@ -278,16 +332,35 @@ def coverage(minutes: int = 15) -> Coverage:
     )
 
 
+@app.get("/flow")
+def flow(edge: str, minutes: int = 15) -> dict[str, object]:
+    """Current flow on one link, for the operator to see before closing it.
+
+    Closing a road that is already stopped removes nothing. Measured speed is
+    the median of matched probes in the window; with none, it is null and the
+    console says the flow is unknown rather than showing the free-flow figure
+    as if it were live.
+    """
+    if edge not in GRAPH.edge_nodes:
+        raise HTTPException(status_code=404, detail="no such edge")
+    measured = store.median_speeds(DB, minutes).get(edge)
+    return {
+        "edge": edge,
+        "window_minutes": minutes,
+        "measured_kmh": round(measured * 3.6, 1) if measured is not None else None,
+    }
+
+
 @app.get("/spread")
 def spread(minutes: int = 120) -> SpreadResponse:
-    """How affected travellers' leading alternative has actually split.
+    """How affected travellers have actually split across alternatives.
 
-    Real counts over a decaying window, not a claim that round robin must be
-    even. Keys are origin/destination/vehicle node ids, not place names --
-    the graph has no reverse-geocoder, and the operator console's own closure
-    picker already shows raw edge ids for the same reason.
+    Real counts over a window: who accepted each alternative, and how many of
+    them later said they took it. Not a claim that the assignment must be
+    even. Each split carries its two ends as coordinates, since the graph has
+    no place names and the console labels them itself.
     """
     return SpreadResponse(
         window_minutes=minutes,
-        splits=[SpreadSplit(**s) for s in store.spread_split(DB, minutes)],
+        splits=[_labelled(s) for s in store.spread_split(DB, minutes)],
     )

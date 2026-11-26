@@ -99,3 +99,23 @@ def test_trip_answers_are_counted(client):
     assert summary["answers"] >= 2
     assert summary["took_suggested"] >= 1
     assert summary["already_knew"] >= 1
+
+
+def test_a_diverted_trip_says_what_it_usually_costs(client):
+    usual = route(client, closed=[])["routes"][0]
+    shut = usual["edges"][len(usual["edges"]) // 2]
+    diverted = route(client, closed=[shut])
+    assert diverted["usual_seconds"] == pytest.approx(usual["seconds"], abs=0.1)
+    assert diverted["routes"][0]["seconds"] >= diverted["usual_seconds"]
+
+
+def test_the_browser_may_send_the_operator_token_and_clear_a_closure(client):
+    r = client.options(
+        "/closures/1",
+        headers={
+            "origin": "http://localhost:3000",
+            "access-control-request-method": "DELETE",
+            "access-control-request-headers": "x-operator-token",
+        },
+    )
+    assert r.status_code == 200
